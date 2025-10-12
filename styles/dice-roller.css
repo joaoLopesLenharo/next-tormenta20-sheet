@@ -1,0 +1,7 @@
+.dice-roller-card {
+  background-color: hsl(0 0% 100%); /* Cor de fundo para o modo claro */
+}
+
+.dark .dice-roller-card {
+  background-color: hsl(240 10% 3.9%); /* Cor de fundo para o modo escuro */
+}
