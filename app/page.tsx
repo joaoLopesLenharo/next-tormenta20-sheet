@@ -23,8 +23,6 @@ import {
   BookOpen,
   Package,
   Settings,
-  Moon,
-  Sun,
   Camera,
   ChevronRight,
   Filter,
@@ -33,6 +31,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
 import { DiceRoller } from "@/components/dice-roller"
+import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler"
 
 // TypeScript interfaces
 interface CharacterType {
@@ -140,7 +139,6 @@ export default function CharacterSheet() {
   const [sheets, setSheets] = useState<Sheet[]>([])
   const [activeSheetId, setActiveSheetId] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false)
-  const [darkMode, setDarkMode] = useState<boolean>(false)
   const [collapsedSections, setCollapsedSections] = useState<CollapsedSectionsType>({})
   const [alert, setAlert] = useState<AlertType>({ show: false, type: "", message: "" })
   const [searchTerm, setSearchTerm] = useState<string>("")
@@ -160,6 +158,8 @@ export default function CharacterSheet() {
   const imageInputRef = useRef<HTMLInputElement>(null)
   const photoEditRef = useRef<HTMLImageElement>(null)
   const photoEditCircleRef = useRef<HTMLDivElement>(null)
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingSheetsRef = useRef<Sheet[] | null>(null)
 
   // Initialize character data
   useEffect(() => {
@@ -189,13 +189,6 @@ export default function CharacterSheet() {
       setActiveSheetId(newId)
       setCharacter(defaultCharacter)
       saveSheets([newSheet])
-    }
-
-    // Load theme preference
-    const savedTheme = localStorage.getItem("theme")
-    if (savedTheme === "dark") {
-      setDarkMode(true)
-      document.documentElement.classList.add("dark")
     }
   }
 
@@ -260,6 +253,23 @@ export default function CharacterSheet() {
     }
   }
 
+  const scheduleSheetsSave = (sheetsData: Sheet[]) => {
+    pendingSheetsRef.current = sheetsData
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+    }
+    saveTimeoutRef.current = setTimeout(() => {
+      if (pendingSheetsRef.current) {
+        saveSheets(pendingSheetsRef.current)
+        pendingSheetsRef.current = null
+      }
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+        saveTimeoutRef.current = null
+      }
+    }, 300)
+  }
+
   const updateCharacter = (updates: Partial<CharacterType>) => {
     const updatedCharacter = { ...character, ...updates } as CharacterType
     setCharacter(updatedCharacter)
@@ -275,7 +285,7 @@ export default function CharacterSheet() {
         : sheet,
     )
     setSheets(updatedSheets)
-    saveSheets(updatedSheets)
+    scheduleSheetsSave(updatedSheets)
   }
 
   const getTotalLevel = (char = character) => {
@@ -314,19 +324,6 @@ export default function CharacterSheet() {
   const showAlert = (type: string, message: string) => {
     setAlert({ show: true, type, message })
     setTimeout(() => setAlert({ show: false, type: "", message: "" }), 5000)
-  }
-
-  const toggleTheme = () => {
-    const newDarkMode = !darkMode
-    setDarkMode(newDarkMode)
-
-    if (newDarkMode) {
-      document.documentElement.classList.add("dark")
-      localStorage.setItem("theme", "dark")
-    } else {
-      document.documentElement.classList.remove("dark")
-      localStorage.setItem("theme", "light")
-    }
   }
 
   const toggleSection = (sectionId: string) => {
@@ -384,7 +381,7 @@ export default function CharacterSheet() {
         setSheets(updatedSheets)
         setActiveSheetId(newId)
         setCharacter(newSheet.data)
-        saveSheets(updatedSheets)
+        scheduleSheetsSave(updatedSheets)
 
         showAlert("success", "Personagem importado com sucesso!")
         event.target.value = ""
@@ -410,7 +407,7 @@ export default function CharacterSheet() {
     setSheets(updatedSheets)
     setActiveSheetId(newId)
     setCharacter(newSheet.data)
-    saveSheets(updatedSheets)
+    scheduleSheetsSave(updatedSheets)
     setSidebarOpen(false)
   }
 
@@ -431,7 +428,7 @@ export default function CharacterSheet() {
 
     const updatedSheets = sheets.filter((s) => s.id !== sheetId)
     setSheets(updatedSheets)
-    saveSheets(updatedSheets)
+    scheduleSheetsSave(updatedSheets)
 
     if (activeSheetId === sheetId && updatedSheets.length > 0) {
       const newActive = updatedSheets[0]
@@ -440,6 +437,14 @@ export default function CharacterSheet() {
       localStorage.setItem("t20_active_sheet_id", newActive.id)
     }
   }
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -655,6 +660,7 @@ export default function CharacterSheet() {
   ]
 
   const getFilteredSkills = () => {
+    if (!character) return []
     return skillsData.filter((skillData) => {
       const skill = character.pericias?.[skillData.name] || {}
 
@@ -755,7 +761,7 @@ export default function CharacterSheet() {
   }
 
   return (
-    <div className={cn("app", darkMode && "dark")}>
+    <div className="app">
       <div className="sidebar-trigger" title="Mostrar fichas" onClick={() => setSidebarOpen(!sidebarOpen)}>
         <ChevronRight className="w-4 h-4" />
       </div>
@@ -779,7 +785,7 @@ export default function CharacterSheet() {
         <div className="p-4 space-y-2 max-h-[calc(100vh-200px)] overflow-y-auto bg-sidebar">
           {sheets.map((sheet) => {
             const sheetClassName = cn(
-              "p-3 rounded-lg border cursor-pointer transition-all duration-200",
+              "hover-group p-3 rounded-lg border cursor-pointer transition-all duration-200",
               sheet.id === activeSheetId
                 ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-primary shadow-md"
                 : "bg-sidebar-accent/50 border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:border-sidebar-primary/50",
@@ -814,9 +820,7 @@ export default function CharacterSheet() {
 
       <div className="main-content-new">
         <div className="flex justify-end mb-4">
-          <Button variant="ghost" size="sm" onClick={toggleTheme}>
-            {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </Button>
+          <AnimatedThemeToggler className="h-9 w-9 rounded-md bg-background hover:bg-accent hover:text-accent-foreground" />
         </div>
 
         {/* Header */}
@@ -1730,17 +1734,21 @@ export default function CharacterSheet() {
                 <CollapsibleContent className="section-content">
                   <div className="space-y-4">
                     {(character.habilidades || []).map((ability, index) => (
-                      <Card key={`ability-${index}-${ability.nome || "unnamed"}`} className="p-4">
+                      <Card key={ability.id ?? `ability-${index}`} className="p-4">
                         <div className="space-y-3">
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
                             <Input
                               value={ability.nome}
                               onChange={(e) => {
                                 const newAbilities = [...(character.habilidades || [])]
-                                newAbilities[index] = { ...ability, nome: e.target.value }
+                                newAbilities[index] = {
+                                  ...ability,
+                                  id: ability.id ?? generateId(),
+                                  nome: e.target.value,
+                                }
                                 updateCharacter({ habilidades: newAbilities })
                               }}
-                              className="font-semibold text-lg border-none p-0 focus:ring-0"
+                              className="flex-1 font-semibold text-lg focus-visible:ring-0 focus-visible:border-ring"
                               placeholder="Nome da Habilidade"
                             />
                             <Button
@@ -1808,7 +1816,7 @@ export default function CharacterSheet() {
                 <CollapsibleContent className="section-content">
                   <div className="space-y-4">
                     {(character.poderes || []).map((power, index) => (
-                      <Card key={`power-${index}-${power.nome || "unnamed"}`} className="p-4">
+                      <Card key={power.id ?? `power-${index}`} className="p-4">
                         <div className="space-y-3">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3 flex-1">
@@ -1816,10 +1824,14 @@ export default function CharacterSheet() {
                                 value={power.nome || ""}
                                 onChange={(e) => {
                                   const newPowers = [...(character.poderes || [])]
-                                  newPowers[index] = { ...power, nome: e.target.value }
+                                  newPowers[index] = {
+                                    ...power,
+                                    id: power.id ?? generateId(),
+                                    nome: e.target.value,
+                                  }
                                   updateCharacter({ poderes: newPowers })
                                 }}
-                                className="font-semibold text-lg border-none p-0 focus:ring-0 flex-1"
+                                className="flex-1 font-semibold text-lg focus-visible:ring-0 focus-visible:border-ring"
                                 placeholder="Nome do Poder"
                               />
                               <Select
