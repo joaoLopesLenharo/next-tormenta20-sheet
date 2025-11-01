@@ -457,15 +457,29 @@ export default function CharacterSheet() {
 
     const reader = new FileReader()
     reader.onload = (e) => {
-      const photoData = {
-        src: e.target?.result as string,
-        srcOriginal: e.target?.result as string,
+      const imageUrl = e.target?.result as string
+      const photoData: PhotoData = {
+        src: imageUrl,
+        srcOriginal: imageUrl,
         zoom: 1,
         offsetX: 0,
         offsetY: 0,
       }
-      updateCharacter({ foto: photoData })
+      
+      // If we're in the photo edit modal, update the temp photo
+      if (photoEditModal) {
+        setTempPhoto(photoData)
+      } else {
+        // Otherwise update the character's photo directly
+        updateCharacter({ foto: photoData })
+      }
+      
       showAlert("success", "Foto do personagem atualizada!")
+      
+      // Reset the file input to allow selecting the same file again
+      if (event.target) {
+        event.target.value = ''
+      }
     }
     reader.readAsDataURL(file)
   }
@@ -2958,6 +2972,13 @@ export default function CharacterSheet() {
             </div>
 
             <div className="flex flex-wrap gap-2 mb-4">
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+              />
               <Button variant="outline" size="sm" onClick={() => imageInputRef.current?.click()}>
                 <Upload className="w-4 h-4" />
                 Trocar Foto
