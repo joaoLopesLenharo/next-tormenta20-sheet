@@ -67,6 +67,8 @@ interface CharacterType {
   } & Record<string, any>
   defesa: number
   defesa_outros?: number // Added for defense bonus
+  spellDCAttributes?: string[] // Attributes for spell DC calculation
+  spellDC_outros?: number // Added for spell DC bonus
   pericias: PericiasType
   inventario: {
     armas: any[]
@@ -233,6 +235,8 @@ export default function CharacterSheet() {
     },
     defesa: 10, // Default value for defense
     defesa_outros: 0, // Default value for defense outros bonus
+    spellDCAttributes: ["inteligencia"], // Default spell DC attribute
+    spellDC_outros: 0, // Default value for spell DC outros bonus
     pericias: {},
     inventario: {
       armas: [],
@@ -413,6 +417,30 @@ export default function CharacterSheet() {
     const outrosBonus = character.defesa_outros || 0
 
     return baseDefense + attrMod + armorBonus + shieldBonus + outrosBonus
+  }
+
+  const calculateSpellDC = () => {
+    if (!character) return 10
+    const baseDC = 10
+
+    // Calculate half level (always added)
+    const halfLevel = Math.floor(getTotalLevel() / 2)
+
+    // Calculate sum of modifiers from all selected spell DC attributes
+    const selectedAttrs = character.spellDCAttributes || ["inteligencia"]
+    const attrMod = selectedAttrs.reduce((sum, attr) => {
+      return sum + getAttributeModifier(attr as keyof CharacterType["atributos"])
+    }, 0)
+
+    // Get bonus from equipped items
+    const itemsBonus = (character.inventario?.itens || [])
+      .filter((item) => item.equipada)
+      .reduce((sum, item) => sum + (item.bonus_cd || 0), 0)
+
+    // Get "outros" bonus from spell DC field
+    const outrosBonus = character.spellDC_outros || 0
+
+    return baseDC + halfLevel + attrMod + itemsBonus + outrosBonus
   }
 
   const showAlert = (type: string, message: string) => {
@@ -918,9 +946,9 @@ export default function CharacterSheet() {
             </Button>
           </div>
           <div className="space-y-2">
-            <Button onClick={createNewSheet} className="w-full btn-primary gap-2 h-11">
-              <Plus className="w-4 h-4" />
-              Nova Ficha
+          <Button onClick={createNewSheet} className="w-full btn-primary gap-2 h-11">
+            <Plus className="w-4 h-4" />
+            Nova Ficha
             </Button>
             <div className="grid grid-cols-2 gap-2">
               <Button
@@ -938,7 +966,7 @@ export default function CharacterSheet() {
               >
                 <Download className="w-4 h-4" />
                 Exportar
-              </Button>
+          </Button>
             </div>
             <input
               ref={fileInputRef}
@@ -1052,7 +1080,7 @@ export default function CharacterSheet() {
           </div>
         </header>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
           <Card className="p-4 bg-gradient-to-br from-red-500/10 to-red-600/5 border-red-500/20">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
@@ -1081,6 +1109,20 @@ export default function CharacterSheet() {
             </div>
           </Card>
 
+          <Card className="p-4 bg-gradient-to-br from-yellow-500/10 to-yellow-600/5 border-yellow-500/20">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-yellow-500/20 flex items-center justify-center">
+                <Zap className="w-5 h-5 text-yellow-500" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Prana</p>
+                <p className="text-lg font-bold text-foreground">
+                  {character?.recursos?.prana?.atual || 0}/{character?.recursos?.prana?.maximo || 0}
+                </p>
+              </div>
+            </div>
+          </Card>
+
           <Card className="p-4 bg-gradient-to-br from-amber-500/10 to-amber-600/5 border-amber-500/20">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
@@ -1101,6 +1143,18 @@ export default function CharacterSheet() {
               <div>
                 <p className="text-xs text-muted-foreground font-medium">Nível</p>
                 <p className="text-lg font-bold text-foreground">{getTotalLevel()}</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-4 bg-gradient-to-br from-green-500/10 to-green-600/5 border-green-500/20">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
+                <ScrollText className="w-5 h-5 text-green-500" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">CD Magias</p>
+                <p className="text-lg font-bold text-foreground">{calculateSpellDC()}</p>
               </div>
             </div>
           </Card>
@@ -2250,6 +2304,136 @@ export default function CharacterSheet() {
                     />
                   </CollapsibleTrigger>
                   <CollapsibleContent className="section-content space-y-4">
+                    {/* Spell DC Configuration Section */}
+                    <div className="mb-6 p-4 border rounded-lg bg-card">
+                      <h3 className="font-semibold mb-4">Classe de Dificuldade (CD) das Magias</h3>
+                      
+                      <div className="mb-4">
+                        <Label htmlFor="spell-dc-attributes">Atributos de Conjuração</Label>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-2">
+                          {[
+                            { value: "forca", label: "Força", abbr: "FOR" },
+                            { value: "destreza", label: "Destreza", abbr: "DES" },
+                            { value: "constituicao", label: "Constituição", abbr: "CON" },
+                            { value: "inteligencia", label: "Inteligência", abbr: "INT" },
+                            { value: "sabedoria", label: "Sabedoria", abbr: "SAB" },
+                            { value: "carisma", label: "Carisma", abbr: "CAR" },
+                          ].map((attr) => {
+                            const selectedAttrs = character?.spellDCAttributes || ["inteligencia"]
+                            const isSelected = selectedAttrs.includes(attr.value)
+                            const modifier = getAttributeModifier(attr.value as keyof CharacterType["atributos"])
+
+                            return (
+                              <div
+                                key={attr.value}
+                                className={cn(
+                                  "flex items-center gap-2 p-3 rounded-md border cursor-pointer transition-colors",
+                                  isSelected
+                                    ? "bg-primary/10 border-primary text-primary"
+                                    : "bg-background border-input hover:bg-accent hover:border-accent-foreground/20",
+                                )}
+                                onClick={() => {
+                                  const currentAttrs = character?.spellDCAttributes || ["inteligencia"]
+                                  let newAttrs: string[]
+
+                                  if (isSelected) {
+                                    // Remove if already selected (but keep at least one)
+                                    if (currentAttrs.length > 1) {
+                                      newAttrs = currentAttrs.filter((a) => a !== attr.value)
+                                    } else {
+                                      return // Don't allow removing the last one
+                                    }
+                                  } else {
+                                    // Add to selection
+                                    newAttrs = [...currentAttrs, attr.value]
+                                  }
+
+                                  updateCharacter({ spellDCAttributes: newAttrs })
+                                }}
+                              >
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={(checked) => {
+                                    const currentAttrs = character?.spellDCAttributes || ["inteligencia"]
+
+                                    if (checked) {
+                                      updateCharacter({ spellDCAttributes: [...currentAttrs, attr.value] })
+                                    } else {
+                                      // Don't allow removing the last one
+                                      if (currentAttrs.length > 1) {
+                                        updateCharacter({
+                                          spellDCAttributes: currentAttrs.filter((a) => a !== attr.value),
+                                        })
+                                      }
+                                    }
+                                  }}
+                                />
+                                <div className="flex-1">
+                                  <div className="font-medium text-sm">{attr.label}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {attr.abbr} {modifier >= 0 ? `+${modifier}` : modifier}
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Selecione um ou mais atributos. Os modificadores serão somados.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="text-center p-4 bg-primary/10 rounded-lg border border-primary/20">
+                          <Label className="text-sm font-medium text-primary">CD Total</Label>
+                          <div className="text-3xl font-bold text-primary mt-2">{calculateSpellDC()}</div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            10 + {Math.floor(getTotalLevel() / 2)} (Metade do Nível) + {(() => {
+                              const selectedAttrs = character?.spellDCAttributes || ["inteligencia"]
+                              const attrNames = {
+                                forca: "FOR",
+                                destreza: "DES",
+                                constituicao: "CON",
+                                inteligencia: "INT",
+                                sabedoria: "SAB",
+                                carisma: "CAR",
+                              }
+                              return selectedAttrs
+                                .map(
+                                  (attr) => attrNames[attr as keyof typeof attrNames] || attr.slice(0, 3).toUpperCase(),
+                                )
+                                .join(" + ")
+                            })()} + Itens + Outros
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="items-spell-dc">Bônus Itens (CD)</Label>
+                          <div className="text-center p-2 bg-muted rounded border">
+                            {(character?.inventario?.itens || [])
+                              .filter((item) => item.equipada)
+                              .reduce((sum, item) => sum + (item.bonus_cd || 0), 0)}
+                          </div>
+                          <p className="text-xs text-muted-foreground">Automático (itens equipados)</p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="other-spell-dc">Outros Bônus (CD)</Label>
+                          <Input
+                            id="other-spell-dc"
+                            type="number"
+                            value={character?.spellDC_outros || 0}
+                            onChange={(e) => {
+                              updateCharacter({ spellDC_outros: Number.parseInt(e.target.value) || 0 })
+                            }}
+                            className="form-input text-center"
+                            placeholder="0"
+                          />
+                          <p className="text-xs text-muted-foreground">Habilidades, outras fontes</p>
+                        </div>
+                      </div>
+                    </div>
+
                     {Object.entries(spellTypes).map(([type, typeLabel]) => (
                       <div key={`spell-type-${type}`}>
                         <h3 className="font-semibold mb-3">{typeLabel}</h3>
@@ -3075,6 +3259,7 @@ export default function CharacterSheet() {
                               quantidade: 1,
                               peso: 0,
                               descricao: "",
+                              equipada: false,
                             }
                             updateCharacter({
                               inventario: {
@@ -3209,6 +3394,19 @@ export default function CharacterSheet() {
                               </div>
 
                               <div className="border-t pt-4">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <Checkbox
+                                    checked={item.equipada || false}
+                                    onCheckedChange={(checked) => {
+                                      const newItems = [...(character?.inventario?.itens || [])]
+                                      newItems[index] = { ...item, equipada: checked === true }
+                                      updateCharacter({
+                                        inventario: { ...(character?.inventario || {}), itens: newItems },
+                                      })
+                                    }}
+                                  />
+                                  <Label className="text-sm font-semibold">Equipado</Label>
+                                </div>
                                 <h4 className="font-semibold mb-3 text-sm">Bônus do Item</h4>
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                   <div>
@@ -3288,6 +3486,25 @@ export default function CharacterSheet() {
                                         newItems[index] = {
                                           ...item,
                                           bonus_movimento: Number.parseInt(e.target.value) || 0,
+                                        }
+                                        updateCharacter({
+                                          inventario: { ...(character?.inventario || {}), itens: newItems },
+                                        })
+                                      }}
+                                      className="form-input h-8 text-sm"
+                                      placeholder="0"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Bônus CD (Magias)</Label>
+                                    <Input
+                                      type="number"
+                                      value={item.bonus_cd || 0}
+                                      onChange={(e) => {
+                                        const newItems = [...(character?.inventario?.itens || [])]
+                                        newItems[index] = {
+                                          ...item,
+                                          bonus_cd: Number.parseInt(e.target.value) || 0,
                                         }
                                         updateCharacter({
                                           inventario: { ...(character?.inventario || {}), itens: newItems },
