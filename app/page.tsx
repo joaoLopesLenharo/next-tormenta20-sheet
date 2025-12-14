@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -161,6 +161,14 @@ export default function CharacterSheet() {
   const photoEditCircleRef = useRef<HTMLDivElement>(null)
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingSheetsRef = useRef<Sheet[] | null>(null)
+  const updateSheetsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const activeSheetIdRef = useRef<string | null>(null)
+  const updateInventoryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Keep activeSheetIdRef in sync with activeSheetId
+  useEffect(() => {
+    activeSheetIdRef.current = activeSheetId
+  }, [activeSheetId])
 
   // Initialize character data
   useEffect(() => {
@@ -271,24 +279,39 @@ export default function CharacterSheet() {
     }, 300)
   }
 
-  const updateCharacter = (updates: Partial<CharacterType>) => {
-    if (!character) return
-    const updatedCharacter = { ...character, ...updates } as CharacterType
-    setCharacter(updatedCharacter)
-
-    // Update in sheets array
-    const updatedSheets = sheets.map((sheet) =>
-      sheet.id === activeSheetId
-        ? {
-            ...sheet,
-            data: updatedCharacter,
-            meta: { nome: updatedCharacter.nome || "Nova Ficha", nivel: getTotalLevel(updatedCharacter) },
-          }
-        : sheet,
-    )
-    setSheets(updatedSheets)
-    scheduleSheetsSave(updatedSheets)
-  }
+  const updateCharacter = useCallback((updates: Partial<CharacterType>) => {
+    setCharacter((prevCharacter) => {
+      if (!prevCharacter) return prevCharacter
+      const updatedCharacter = { ...prevCharacter, ...updates } as CharacterType
+      
+      // Clear existing timeout
+      if (updateSheetsTimeoutRef.current) {
+        clearTimeout(updateSheetsTimeoutRef.current)
+      }
+      
+      // Update sheets array asynchronously to avoid blocking input
+      updateSheetsTimeoutRef.current = setTimeout(() => {
+        setSheets((prevSheets) => {
+          const currentActiveSheetId = activeSheetIdRef.current
+          if (!currentActiveSheetId) return prevSheets
+          
+          const updatedSheets = prevSheets.map((sheet) =>
+            sheet.id === currentActiveSheetId
+              ? {
+                  ...sheet,
+                  data: updatedCharacter,
+                  meta: { nome: updatedCharacter.nome || "Nova Ficha", nivel: getTotalLevel(updatedCharacter) },
+                }
+              : sheet,
+          )
+          scheduleSheetsSave(updatedSheets)
+          return updatedSheets
+        })
+      }, 100)
+      
+      return updatedCharacter
+    })
+  }, [])
 
   const getTotalLevel = (char = character) => {
     return (char?.classes || []).reduce((acc, c) => acc + (Number.parseInt(c.nivel) || 0), 0) || char?.nivel || 1
@@ -508,6 +531,12 @@ export default function CharacterSheet() {
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current)
+      }
+      if (updateSheetsTimeoutRef.current) {
+        clearTimeout(updateSheetsTimeoutRef.current)
+      }
+      if (updateInventoryTimeoutRef.current) {
+        clearTimeout(updateInventoryTimeoutRef.current)
       }
     }
   }, [])
@@ -832,9 +861,14 @@ export default function CharacterSheet() {
   if (!character) {
     return (
       <div className="character-sheet flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <Dice6 className="w-12 h-12 mx-auto mb-4 text-primary animate-spin" />
-          <p className="text-muted-foreground">Carregando ficha...</p>
+        <div className="text-center space-y-4">
+          <div className="relative">
+            <Dice6 className="w-16 h-16 mx-auto text-primary animate-spin" style={{ animationDuration: '2s' }} />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" style={{ animationDuration: '1s' }} />
+            </div>
+          </div>
+          <p className="text-muted-foreground font-medium animate-pulse">Carregando ficha...</p>
         </div>
       </div>
     )
@@ -862,8 +896,8 @@ export default function CharacterSheet() {
               <X className="w-4 h-4" />
             </Button>
           </div>
-          <Button onClick={createNewSheet} className="w-full btn-primary">
-            <Plus className="w-4 h-4 mr-2" />
+          <Button onClick={createNewSheet} className="w-full btn-primary gap-2">
+            <Plus className="w-4 h-4" />
             Nova Ficha
           </Button>
         </div>
@@ -944,21 +978,21 @@ export default function CharacterSheet() {
             </div>
 
             <div>
-              <h1 className="text-2xl font-bold text-foreground">{character?.nome || "Ficha de Personagem"}</h1>
-              <p className="text-muted-foreground">
+              <h1 className="text-3xl font-bold text-foreground mb-1 tracking-tight">{character?.nome || "Ficha de Personagem"}</h1>
+              <p className="text-muted-foreground text-sm font-medium">
                 {character?.raca || ""} • Nível {getTotalLevel()}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="gap-2">
               <Upload className="w-4 h-4" />
-              Importar
+              <span className="hidden sm:inline">Importar</span>
             </Button>
-            <Button onClick={exportCharacter}>
+            <Button onClick={exportCharacter} className="gap-2">
               <Download className="w-4 h-4" />
-              Exportar
+              <span className="hidden sm:inline">Exportar</span>
             </Button>
             <input ref={fileInputRef} type="file" accept=".json" onChange={handleFileImport} className="hidden" />
           </div>
@@ -966,7 +1000,7 @@ export default function CharacterSheet() {
 
         {/* Tabs and Sidebar */}
         <Tabs defaultValue="basic-info" className="w-full">
-          <TabsList className="sticky top-0 z-40 flex flex-row gap-2 p-4 bg-background border-b border-border w-full overflow-x-auto">
+          <TabsList className="sticky top-0 z-40 flex flex-row gap-2 p-4 bg-background border-b border-border w-full">
             <div className="text-sm font-semibold text-muted-foreground mr-4 flex items-center">Navegação</div>
             <TabsTrigger value="basic-info" className="justify-start whitespace-nowrap">
               <Settings className="w-4 h-4" />
@@ -2420,7 +2454,7 @@ export default function CharacterSheet() {
 
                       <div className="space-y-4">
                         {character.inventario?.armas?.map((weapon, index) => (
-                          <Card key={`weapon-${weapon.id || index}-${weapon.nome || "unnamed"}`} className="p-4">
+                          <Card key={`weapon-${weapon.id || index}`} className="p-4">
                             <div className="space-y-4">
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
@@ -2428,11 +2462,43 @@ export default function CharacterSheet() {
                                   <Input
                                     value={weapon.nome || ""}
                                     onChange={(e) => {
+                                      const newValue = e.target.value
                                       const newWeapons = [...(character?.inventario?.armas || [])]
-                                      newWeapons[index] = { ...weapon, nome: e.target.value }
-                                      updateCharacter({
-                                        inventario: { ...(character?.inventario || {}), armas: newWeapons },
+                                      newWeapons[index] = { ...weapon, nome: newValue }
+                                      
+                                      // Update character state immediately
+                                      setCharacter((prev) => {
+                                        if (!prev) return prev
+                                        return {
+                                          ...prev,
+                                          inventario: { ...(prev.inventario || {}), armas: newWeapons },
+                                        }
                                       })
+                                      
+                                      // Debounce sheets update to avoid blocking
+                                      if (updateInventoryTimeoutRef.current) {
+                                        clearTimeout(updateInventoryTimeoutRef.current)
+                                      }
+                                      const updatedInventory = { ...(character?.inventario || {}), armas: newWeapons }
+                                      updateInventoryTimeoutRef.current = setTimeout(() => {
+                                        setSheets((prevSheets) => {
+                                          const currentActiveSheetId = activeSheetIdRef.current
+                                          if (!currentActiveSheetId) return prevSheets
+                                          
+                                          return prevSheets.map((sheet) =>
+                                            sheet.id === currentActiveSheetId
+                                              ? {
+                                                  ...sheet,
+                                                  data: {
+                                                    ...sheet.data,
+                                                    inventario: updatedInventory,
+                                                  },
+                                                  meta: { nome: sheet.data.nome || "Nova Ficha", nivel: getTotalLevel(sheet.data) },
+                                                }
+                                              : sheet,
+                                          )
+                                        })
+                                      }, 200)
                                     }}
                                     className="form-input"
                                   />
@@ -2681,7 +2747,7 @@ export default function CharacterSheet() {
 
                       <div className="space-y-4">
                         {character.inventario?.armaduras?.map((armor, index) => (
-                          <Card key={`armor-${armor.id || index}-${armor.nome || "unnamed"}`} className="p-4">
+                          <Card key={`armor-${armor.id || index}`} className="p-4">
                             <div className="space-y-4">
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
@@ -2689,11 +2755,43 @@ export default function CharacterSheet() {
                                   <Input
                                     value={armor.nome || ""}
                                     onChange={(e) => {
+                                      const newValue = e.target.value
                                       const newArmors = [...(character.inventario?.armaduras || [])]
-                                      newArmors[index] = { ...armor, nome: e.target.value }
-                                      updateCharacter({
-                                        inventario: { ...(character?.inventario || {}), armaduras: newArmors },
+                                      newArmors[index] = { ...armor, nome: newValue }
+                                      
+                                      // Update character state immediately
+                                      setCharacter((prev) => {
+                                        if (!prev) return prev
+                                        return {
+                                          ...prev,
+                                          inventario: { ...(prev.inventario || {}), armaduras: newArmors },
+                                        }
                                       })
+                                      
+                                      // Debounce sheets update to avoid blocking
+                                      if (updateInventoryTimeoutRef.current) {
+                                        clearTimeout(updateInventoryTimeoutRef.current)
+                                      }
+                                      const updatedInventory = { ...(character?.inventario || {}), armaduras: newArmors }
+                                      updateInventoryTimeoutRef.current = setTimeout(() => {
+                                        setSheets((prevSheets) => {
+                                          const currentActiveSheetId = activeSheetIdRef.current
+                                          if (!currentActiveSheetId) return prevSheets
+                                          
+                                          return prevSheets.map((sheet) =>
+                                            sheet.id === currentActiveSheetId
+                                              ? {
+                                                  ...sheet,
+                                                  data: {
+                                                    ...sheet.data,
+                                                    inventario: updatedInventory,
+                                                  },
+                                                  meta: { nome: sheet.data.nome || "Nova Ficha", nivel: getTotalLevel(sheet.data) },
+                                                }
+                                              : sheet,
+                                          )
+                                        })
+                                      }, 200)
                                     }}
                                     className="form-input"
                                   />
@@ -2855,7 +2953,7 @@ export default function CharacterSheet() {
 
                       <div className="space-y-4">
                         {character.inventario?.itens?.map((item, index) => (
-                          <Card key={`item-${item.id || index}-${item.nome || "unnamed"}`} className="p-4">
+                          <Card key={`item-${item.id || index}`} className="p-4">
                             <div className="space-y-4">
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
@@ -2863,11 +2961,43 @@ export default function CharacterSheet() {
                                   <Input
                                     value={item.nome || ""}
                                     onChange={(e) => {
+                                      const newValue = e.target.value
                                       const newItems = [...(character?.inventario?.itens || [])]
-                                      newItems[index] = { ...item, nome: e.target.value }
-                                      updateCharacter({
-                                        inventario: { ...(character?.inventario || {}), itens: newItems },
+                                      newItems[index] = { ...item, nome: newValue }
+                                      
+                                      // Update character state immediately
+                                      setCharacter((prev) => {
+                                        if (!prev) return prev
+                                        return {
+                                          ...prev,
+                                          inventario: { ...(prev.inventario || {}), itens: newItems },
+                                        }
                                       })
+                                      
+                                      // Debounce sheets update to avoid blocking
+                                      if (updateInventoryTimeoutRef.current) {
+                                        clearTimeout(updateInventoryTimeoutRef.current)
+                                      }
+                                      const updatedInventory = { ...(character?.inventario || {}), itens: newItems }
+                                      updateInventoryTimeoutRef.current = setTimeout(() => {
+                                        setSheets((prevSheets) => {
+                                          const currentActiveSheetId = activeSheetIdRef.current
+                                          if (!currentActiveSheetId) return prevSheets
+                                          
+                                          return prevSheets.map((sheet) =>
+                                            sheet.id === currentActiveSheetId
+                                              ? {
+                                                  ...sheet,
+                                                  data: {
+                                                    ...sheet.data,
+                                                    inventario: updatedInventory,
+                                                  },
+                                                  meta: { nome: sheet.data.nome || "Nova Ficha", nivel: getTotalLevel(sheet.data) },
+                                                }
+                                              : sheet,
+                                          )
+                                        })
+                                      }, 200)
                                     }}
                                     className="form-input"
                                   />
