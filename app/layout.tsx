@@ -23,7 +23,12 @@ export const metadata: Metadata = {
   description: "Sistema moderno para gerenciar fichas de personagem do RPG Tormenta 20",
   generator: "v0.app",
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icon-dark-32x32.png", type: "image/png", media: "(prefers-color-scheme: dark)" },
+      { url: "/icon-light-32x32.png", type: "image/png", media: "(prefers-color-scheme: light)" },
+    ],
+    apple: "/apple-icon.png",
   },
 }
 
