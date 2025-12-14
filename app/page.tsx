@@ -16,6 +16,7 @@ import {
   Plus,
   Trash2,
   Upload,
+  Download,
   Dice6,
   Shield,
   Zap,
@@ -916,10 +917,37 @@ export default function CharacterSheet() {
               <X className="w-4 h-4" />
             </Button>
           </div>
-          <Button onClick={createNewSheet} className="w-full btn-primary gap-2 h-11">
-            <Plus className="w-4 h-4" />
-            Nova Ficha
-          </Button>
+          <div className="space-y-2">
+            <Button onClick={createNewSheet} className="w-full btn-primary gap-2 h-11">
+              <Plus className="w-4 h-4" />
+              Nova Ficha
+            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full gap-2 h-11"
+              >
+                <Upload className="w-4 h-4" />
+                Importar
+              </Button>
+              <Button
+                variant="outline"
+                onClick={exportCharacter}
+                className="w-full gap-2 h-11"
+              >
+                <Download className="w-4 h-4" />
+                Exportar
+              </Button>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleFileImport}
+              className="hidden"
+            />
+          </div>
         </div>
 
         <div className="p-4 space-y-2 max-h-[calc(100vh-200px)] overflow-y-auto">
