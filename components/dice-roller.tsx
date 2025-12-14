@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dice6, Target, BookOpen, Zap } from "lucide-react"
+import { Dice6, Target, BookOpen, Zap, Sparkles } from "lucide-react"
 import "@/styles/dice-roller.css"
 
 interface DiceRollerProps {
@@ -16,22 +16,32 @@ interface DiceRollerProps {
 
 export function DiceRoller({ character }: DiceRollerProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const [lastRoll, setLastRoll] = useState<{ result: number; details: string } | null>(null)
+  const [lastRoll, setLastRoll] = useState<{
+    result: number
+    details: string
+    isCrit?: boolean
+    isFail?: boolean
+  } | null>(null)
   const [customDie, setCustomDie] = useState("d20")
   const [customModifier, setCustomModifier] = useState(0)
+  const [isRolling, setIsRolling] = useState(false)
 
-  // Função para rolar um dado d20
   const rollD20 = () => {
     return Math.floor(Math.random() * 20) + 1
   }
 
-  // Função para calcular bônus de atributo
   const getAttributeBonus = (attributeValue: number) => {
     return Math.floor((attributeValue - 10) / 2)
   }
 
-  // Rolagem de atributo
-  const rollAttribute = (attribute: string, value: number) => {
+  const animateRoll = async () => {
+    setIsRolling(true)
+    await new Promise((resolve) => setTimeout(resolve, 450))
+    setIsRolling(false)
+  }
+
+  const rollAttribute = async (attribute: string, value: number) => {
+    await animateRoll()
     const roll = rollD20()
     const bonus = getAttributeBonus(value)
     const total = roll + bonus
@@ -40,22 +50,21 @@ export function DiceRoller({ character }: DiceRollerProps) {
     setLastRoll({
       result: total,
       details: `${attribute.toUpperCase()}: ${details}`,
+      isCrit: roll === 20,
+      isFail: roll === 1,
     })
   }
 
-  // Rolagem de perícia
-  const rollSkill = (skillName: string, attribute: string, training: string | boolean = "destreinado") => {
+  const rollSkill = async (skillName: string, attribute: string, training: string | boolean = "destreinado") => {
+    await animateRoll()
     const roll = rollD20()
 
-    // Bônus de atributo
     const attributeValue = character?.atributos?.[attribute] || 10
     const attributeBonus = getAttributeBonus(attributeValue)
 
-    // Metade do nível (sempre adicionado, mesmo sem treino)
     const level = character?.classes?.reduce((acc: number, cls: any) => acc + (cls.nivel || 0), 0) || 0
     const levelBonus = Math.floor(level / 2)
 
-    // Bônus de treinamento baseado no nível do personagem
     let trainingBonus = 0
     const isTrained = training === true || (typeof training === "string" && training !== "destreinado")
 
@@ -69,7 +78,6 @@ export function DiceRoller({ character }: DiceRollerProps) {
       }
     }
 
-    // Bônus adicionais da perícia (se houver)
     const skillData = character?.pericias?.[skillName] || {}
     const others = skillData.outros || 0
     const bonusExtra =
@@ -79,7 +87,6 @@ export function DiceRoller({ character }: DiceRollerProps) {
           ? Number.parseInt(skillData.bonusExtra) || 0
           : 0
 
-    // Penalidade de armadura (se aplicável)
     let armorPenalty = 0
     const skillInfo = skills.find((s) => s.name === skillName)
     if (skillInfo?.armorPenalty) {
@@ -91,7 +98,6 @@ export function DiceRoller({ character }: DiceRollerProps) {
 
     const total = roll + levelBonus + attributeBonus + trainingBonus + others + bonusExtra - armorPenalty
 
-    // Construir detalhes da rolagem
     const detailsParts = [
       `${roll} (d20)`,
       `${levelBonus >= 0 ? "+" : ""}${levelBonus} (nível)`,
@@ -107,11 +113,13 @@ export function DiceRoller({ character }: DiceRollerProps) {
     setLastRoll({
       result: total,
       details: `${skillName}: ${detailsParts} = ${total}`,
+      isCrit: roll === 20,
+      isFail: roll === 1,
     })
   }
 
-  // Rolagem personalizada
-  const rollCustom = (dice: string, modifier = 0) => {
+  const rollCustom = async (dice: string, modifier = 0) => {
+    await animateRoll()
     let roll = 0
     let rollDetails = ""
 
@@ -139,23 +147,26 @@ export function DiceRoller({ character }: DiceRollerProps) {
     const modifierText = modifier !== 0 ? `${modifier >= 0 ? "+" : ""}${modifier}` : ""
     const details = modifierText ? `${rollDetails} ${modifierText} = ${total}` : `${rollDetails} = ${total}`
 
+    const isCrit = dice === "d20" && roll === 20
+    const isFail = dice === "d20" && roll === 1
+
     setLastRoll({
       result: total,
       details: `${dice.toUpperCase()}${modifierText}: ${details}`,
+      isCrit,
+      isFail,
     })
   }
 
-  // Lista de atributos
   const attributes = [
-    { key: "forca", name: "Força", icon: "💪" },
-    { key: "destreza", name: "Destreza", icon: "🏃" },
-    { key: "constituicao", name: "Constituição", icon: "🛡️" },
-    { key: "inteligencia", name: "Inteligência", icon: "🧠" },
-    { key: "sabedoria", name: "Sabedoria", icon: "👁️" },
-    { key: "carisma", name: "Carisma", icon: "😊" },
+    { key: "forca", name: "Força", abbr: "FOR" },
+    { key: "destreza", name: "Destreza", abbr: "DES" },
+    { key: "constituicao", name: "Constituição", abbr: "CON" },
+    { key: "inteligencia", name: "Inteligência", abbr: "INT" },
+    { key: "sabedoria", name: "Sabedoria", abbr: "SAB" },
+    { key: "carisma", name: "Carisma", abbr: "CAR" },
   ]
 
-  // Lista de perícias comuns e suas propriedades
   const skills: Array<{
     name: string
     attribute: string
@@ -183,64 +194,78 @@ export function DiceRoller({ character }: DiceRollerProps) {
     { name: "Vontade", attribute: "sabedoria" },
   ]
 
-  // Dados personalizados
   const customDice = ["d20", "d12", "d10", "d8", "d6", "d4"]
 
   return (
     <div className="fixed bottom-6 right-6 z-[10001] flex flex-col items-end gap-2">
-      {/* Botão Flutuante */}
       <Button
         size="lg"
-        className="w-14 h-14 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 bg-primary hover:bg-primary text-primary-foreground"
+        className={`w-14 h-14 rounded-full shadow-lg transition-all duration-300 bg-gradient-to-br from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-primary-foreground border-2 border-primary/20 ${isRolling ? "rolling" : ""}`}
         onClick={() => setIsOpen(!isOpen)}
       >
         <Dice6 className="w-6 h-6" />
       </Button>
 
-      {/* Painel de Rolagem */}
       {isOpen && (
         <Card className="dice-roller-card absolute bottom-16 right-0 w-80 shadow-xl border-2 text-card-foreground border-border">
-          <CardHeader className="pb-3 border-b border-border">
+          <CardHeader className="pb-3 border-b border-border bg-gradient-to-r from-muted/50 to-muted">
             <CardTitle className="flex items-center gap-2 text-lg text-card-foreground">
-              <Dice6 className="w-5 h-5 text-primary" />
+              <Sparkles className="w-5 h-5 text-primary" />
               Rolagem de Dados
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Última Rolagem */}
+          <CardContent className="p-4 space-y-4">
             {lastRoll && (
-              <div className="p-3 bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 rounded-lg">
+              <div
+                className={`p-4 rounded-lg border ${lastRoll.isCrit ? "bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700" : lastRoll.isFail ? "bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-700" : "bg-green-50 dark:bg-green-950/30 border-green-300 dark:border-green-700"}`}
+              >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-semibold text-green-800 dark:text-green-200">Última Rolagem</span>
+                  <span
+                    className={`font-semibold ${lastRoll.isCrit ? "text-amber-700 dark:text-amber-300" : lastRoll.isFail ? "text-red-700 dark:text-red-300" : "text-green-700 dark:text-green-300"}`}
+                  >
+                    {lastRoll.isCrit ? "Crítico!" : lastRoll.isFail ? "Falha Crítica!" : "Última Rolagem"}
+                  </span>
                   <Badge
                     variant="secondary"
-                    className="bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-100"
+                    className={`text-lg font-bold result-number ${lastRoll.isCrit ? "bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-100 critical-hit" : lastRoll.isFail ? "bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-100 critical-fail" : "bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-100"}`}
                   >
                     {lastRoll.result}
                   </Badge>
                 </div>
-                <p className="text-sm text-green-700 dark:text-green-300">{lastRoll.details}</p>
+                <p
+                  className={`text-sm ${lastRoll.isCrit ? "text-amber-600 dark:text-amber-400" : lastRoll.isFail ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}
+                >
+                  {lastRoll.details}
+                </p>
               </div>
             )}
 
             <Tabs defaultValue="attributes" className="w-full">
-              <TabsList className="grid w-full grid-cols-3 bg-muted">
-                <TabsTrigger value="attributes" className="text-xs">
+              <TabsList className="grid w-full grid-cols-3 bg-muted/80 p-1 rounded-lg">
+                <TabsTrigger
+                  value="attributes"
+                  className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
                   <Target className="w-3 h-3 mr-1" />
-                  Atributos
+                  Atrib.
                 </TabsTrigger>
-                <TabsTrigger value="skills" className="text-xs">
+                <TabsTrigger
+                  value="skills"
+                  className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
                   <BookOpen className="w-3 h-3 mr-1" />
                   Perícias
                 </TabsTrigger>
-                <TabsTrigger value="custom" className="text-xs">
+                <TabsTrigger
+                  value="custom"
+                  className="text-xs rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
                   <Zap className="w-3 h-3 mr-1" />
-                  Diversos
+                  Dados
                 </TabsTrigger>
               </TabsList>
 
-              {/* Aba de Atributos */}
-              <TabsContent value="attributes" className="space-y-2">
+              <TabsContent value="attributes" className="space-y-2 mt-3">
                 <div className="grid grid-cols-2 gap-2">
                   {attributes.map((attr) => {
                     const value = character?.atributos?.[attr.key] || 10
@@ -250,12 +275,13 @@ export function DiceRoller({ character }: DiceRollerProps) {
                         key={attr.key}
                         variant="outline"
                         size="sm"
-                        className="justify-start hover:bg-accent hover:text-accent-foreground h-auto p-2 flex flex-col items-center gap-1 border-border"
+                        className="justify-center h-auto p-3 flex flex-col items-center gap-1 border-border hover:bg-primary/10 hover:border-primary/50 hover:text-primary transition-all bg-transparent"
                         onClick={() => rollAttribute(attr.name, value)}
+                        disabled={isRolling}
                       >
-                        <span className="text-lg">{attr.icon}</span>
-                        <span className="text-xs font-medium">{attr.name}</span>
-                        <Badge variant="secondary" className="text-xs">
+                        <span className="text-xs font-medium text-muted-foreground">{attr.abbr}</span>
+                        <span className="text-sm font-semibold">{attr.name}</span>
+                        <Badge variant="secondary" className="text-xs bg-primary/10 text-primary">
                           {bonus >= 0 ? "+" : ""}
                           {bonus}
                         </Badge>
@@ -265,19 +291,19 @@ export function DiceRoller({ character }: DiceRollerProps) {
                 </div>
               </TabsContent>
 
-              {/* Aba de Perícias */}
-              <TabsContent value="skills" className="space-y-2">
-                <div className="grid grid-cols-1 gap-1 max-h-60 overflow-y-auto">
+              <TabsContent value="skills" className="space-y-2 mt-3">
+                <div className="grid grid-cols-1 gap-1 max-h-60 overflow-y-auto pr-1">
                   {skills.map((skill) => (
                     <Button
                       key={skill.name}
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
-                      className="h-8 justify-start text-xs border-border hover:bg-accent hover:text-accent-foreground"
+                      className="h-9 justify-between text-xs hover:bg-primary/10 hover:text-primary"
                       onClick={() => rollSkill(skill.name, skill.attribute)}
+                      disabled={isRolling}
                     >
-                      {skill.name}
-                      <Badge variant="secondary" className="ml-auto text-xs">
+                      <span className="truncate">{skill.name}</span>
+                      <Badge variant="outline" className="text-xs ml-2 shrink-0">
                         {skill.attribute.substring(0, 3).toUpperCase()}
                       </Badge>
                     </Button>
@@ -285,13 +311,12 @@ export function DiceRoller({ character }: DiceRollerProps) {
                 </div>
               </TabsContent>
 
-              {/* Aba de Dados Personalizados */}
-              <TabsContent value="custom" className="space-y-3">
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">Rolagem Personalizada:</p>
+              <TabsContent value="custom" className="space-y-4 mt-3">
+                <div className="space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground">Rolagem Personalizada</p>
                   <div className="flex items-center gap-2">
                     <Select value={customDie} onValueChange={setCustomDie}>
-                      <SelectTrigger className="w-24">
+                      <SelectTrigger className="w-20 h-9">
                         <SelectValue placeholder="Dado" />
                       </SelectTrigger>
                       <SelectContent className="z-[10002]">
@@ -304,15 +329,16 @@ export function DiceRoller({ character }: DiceRollerProps) {
                     </Select>
                     <Input
                       type="number"
-                      placeholder="Modificador"
-                      className="w-28"
+                      placeholder="Mod"
+                      className="w-20 h-9 text-center"
                       value={customModifier}
-                      onChange={(e) => setCustomModifier(parseInt(e.target.value) || 0)}
+                      onChange={(e) => setCustomModifier(Number.parseInt(e.target.value) || 0)}
                     />
                     <Button
                       size="sm"
-                      className="flex-grow"
+                      className="flex-1 h-9 bg-primary hover:bg-primary/90"
                       onClick={() => rollCustom(customDie, customModifier)}
+                      disabled={isRolling}
                     >
                       Rolar
                     </Button>
@@ -325,47 +351,51 @@ export function DiceRoller({ character }: DiceRollerProps) {
                       key={dice}
                       variant="outline"
                       size="sm"
-                      className="border-border hover:bg-accent hover:text-accent-foreground"
+                      className="h-10 font-semibold border-border hover:bg-primary/10 hover:border-primary/50 hover:text-primary transition-all bg-transparent"
                       onClick={() => rollCustom(dice)}
+                      disabled={isRolling}
                     >
                       {dice.toUpperCase()}
                     </Button>
                   ))}
                 </div>
 
-                {/* Modificadores comuns */}
                 <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">Com Modificadores:</p>
+                  <p className="text-xs font-medium text-muted-foreground">Atalhos</p>
                   <div className="grid grid-cols-2 gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-xs border-border hover:bg-accent hover:text-accent-foreground"
+                      className="text-xs border-border hover:bg-primary/10 hover:border-primary/50 bg-transparent"
                       onClick={() => rollCustom("d20", 5)}
+                      disabled={isRolling}
                     >
                       d20+5
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-xs border-border hover:bg-accent hover:text-accent-foreground"
+                      className="text-xs border-border hover:bg-primary/10 hover:border-primary/50 bg-transparent"
                       onClick={() => rollCustom("d20", 10)}
+                      disabled={isRolling}
                     >
                       d20+10
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-xs border-border hover:bg-accent hover:text-accent-foreground"
+                      className="text-xs border-border hover:bg-primary/10 hover:border-primary/50 bg-transparent"
                       onClick={() => rollCustom("d20", -2)}
+                      disabled={isRolling}
                     >
                       d20-2
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-xs border-border hover:bg-accent hover:text-accent-foreground"
+                      className="text-xs border-border hover:bg-primary/10 hover:border-primary/50 bg-transparent"
                       onClick={() => rollCustom("d20", -5)}
+                      disabled={isRolling}
                     >
                       d20-5
                     </Button>

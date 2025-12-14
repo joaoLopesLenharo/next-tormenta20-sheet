@@ -9,6 +9,12 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // Suprimir avisos de params no React DevTools
+  reactStrictMode: true,
+  // Configuração para evitar problemas com serialização de props
+  experimental: {
+    optimizePackageImports: ['lucide-react'],
+  },
 }
 
 export default nextConfig

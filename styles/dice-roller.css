@@ -1,7 +1,282 @@
+/* Dice Roller Card Styling */
 .dice-roller-card {
-  background-color: hsl(0 0% 100%); /* Cor de fundo para o modo claro */
+  background-color: hsl(30 20% 99%);
+  border: 1px solid hsl(30 20% 85%);
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(8px);
 }
 
 .dark .dice-roller-card {
-  background-color: hsl(240 10% 3.9%); /* Cor de fundo para o modo escuro */
+  background: linear-gradient(145deg, hsl(0 12% 12%) 0%, hsl(0 14% 10%) 100%);
+  border: 1px solid hsl(0 15% 22%);
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5), 0 0 30px -10px rgba(180, 80, 50, 0.15), inset 0 1px 0
+    rgba(255, 255, 255, 0.03);
+}
+
+/* Dice roller floating button */
+.dice-roller-fab {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 10001;
+}
+
+.dice-roller-fab button {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, hsl(15 80% 50%) 0%, hsl(45 90% 55%) 100%);
+  color: hsl(30 15% 98%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25), 0 0 0 3px hsl(30 15% 96%);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: none;
+  cursor: pointer;
+}
+
+.dice-roller-fab button:hover {
+  transform: scale(1.1) rotate(15deg);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35), 0 0 25px rgba(200, 150, 50, 0.3);
+}
+
+.dark .dice-roller-fab button {
+  background: linear-gradient(135deg, hsl(15 85% 55%) 0%, hsl(45 100% 50%) 100%);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 20px rgba(180, 80, 50, 0.2), 0 0 0 3px hsl(0 10% 6%);
+}
+
+.dark .dice-roller-fab button:hover {
+  box-shadow: 0 8px 35px rgba(0, 0, 0, 0.5), 0 0 30px rgba(200, 150, 50, 0.4), 0 0 0 3px hsl(0 10% 6%);
+}
+
+/* Dice roll result styling */
+.dice-result {
+  background: linear-gradient(135deg, hsl(160 60% 95%) 0%, hsl(160 50% 90%) 100%);
+  border: 1px solid hsl(160 60% 80%);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  animation: rollIn 0.3s ease-out;
+}
+
+.dark .dice-result {
+  background: linear-gradient(135deg, hsl(160 40% 15%) 0%, hsl(160 35% 12%) 100%);
+  border: 1px solid hsl(160 40% 25%);
+}
+
+@keyframes rollIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) rotateX(-10deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotateX(0);
+  }
+}
+
+/* Dice button grid */
+.dice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.dice-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  background: hsl(30 20% 95%);
+  border: 1px solid hsl(30 20% 85%);
+  font-weight: 600;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.dice-btn:hover {
+  background: hsl(15 80% 50%);
+  color: white;
+  border-color: hsl(15 80% 50%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(180, 80, 50, 0.3);
+}
+
+.dark .dice-btn {
+  background: hsl(0 12% 14%);
+  border-color: hsl(0 15% 22%);
+  color: hsl(35 30% 92%);
+}
+
+.dark .dice-btn:hover {
+  background: linear-gradient(135deg, hsl(15 85% 55%) 0%, hsl(45 100% 50%) 100%);
+  border-color: hsl(15 85% 55%);
+  color: hsl(0 10% 6%);
+  box-shadow: 0 4px 15px rgba(180, 80, 50, 0.4);
+}
+
+/* Attribute buttons in dice roller */
+.attr-dice-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  background: hsl(30 20% 97%);
+  border: 1px solid hsl(30 20% 88%);
+  transition: all 0.2s ease;
+}
+
+.attr-dice-btn:hover {
+  background: hsl(30 20% 94%);
+  border-color: hsl(15 80% 50%);
+  box-shadow: 0 2px 8px rgba(180, 80, 50, 0.15);
+}
+
+.dark .attr-dice-btn {
+  background: hsl(0 12% 12%);
+  border-color: hsl(0 15% 20%);
+}
+
+.dark .attr-dice-btn:hover {
+  background: hsl(0 14% 16%);
+  border-color: hsl(15 85% 55%);
+  box-shadow: 0 2px 10px rgba(180, 80, 50, 0.25);
+}
+
+/* Skill list in dice roller */
+.skill-dice-list {
+  max-height: 15rem;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.skill-dice-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  background: transparent;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  font-size: 0.875rem;
+}
+
+.skill-dice-btn:hover {
+  background: hsl(30 20% 95%);
+  border-color: hsl(30 20% 85%);
+}
+
+.dark .skill-dice-btn:hover {
+  background: hsl(0 12% 14%);
+  border-color: hsl(0 15% 22%);
+}
+
+/* Tabs in dice roller */
+.dice-roller-tabs {
+  background: hsl(30 20% 95%);
+  border-radius: 0.5rem;
+  padding: 0.25rem;
+}
+
+.dark .dice-roller-tabs {
+  background: hsl(0 12% 12%);
+}
+
+.dice-roller-tab {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.dice-roller-tab[data-state="active"] {
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.dark .dice-roller-tab[data-state="active"] {
+  background: hsl(0 14% 16%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Custom dice input */
+.custom-dice-input {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: hsl(30 20% 97%);
+  border-radius: 0.5rem;
+  border: 1px solid hsl(30 20% 88%);
+}
+
+.dark .custom-dice-input {
+  background: hsl(0 12% 10%);
+  border-color: hsl(0 15% 20%);
+}
+
+/* Roll animation */
+@keyframes diceRoll {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(10deg);
+  }
+  75% {
+    transform: rotate(-10deg);
+  }
+}
+
+.rolling {
+  animation: diceRoll 0.15s ease-in-out 3;
+}
+
+/* Result number animation */
+@keyframes numberPop {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.result-number {
+  animation: numberPop 0.3s ease-out;
+}
+
+/* Critical hit styling */
+.critical-hit {
+  color: hsl(45 100% 50%);
+  text-shadow: 0 0 10px rgba(255, 200, 50, 0.5);
+}
+
+.dark .critical-hit {
+  color: hsl(45 100% 55%);
+  text-shadow: 0 0 15px rgba(255, 200, 50, 0.6);
+}
+
+/* Critical failure styling */
+.critical-fail {
+  color: hsl(0 75% 55%);
+  text-shadow: 0 0 10px rgba(255, 80, 80, 0.4);
+}
+
+.dark .critical-fail {
+  color: hsl(0 80% 60%);
+  text-shadow: 0 0 15px rgba(255, 80, 80, 0.5);
 }

@@ -15,7 +15,6 @@ import {
   ChevronDown,
   Plus,
   Trash2,
-  Download,
   Upload,
   Dice6,
   Shield,
@@ -27,6 +26,11 @@ import {
   ChevronRight,
   Filter,
   X,
+  Sword,
+  Heart,
+  Sparkles,
+  Crown,
+  ScrollText,
 } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
@@ -283,18 +287,18 @@ export default function CharacterSheet() {
     setCharacter((prevCharacter) => {
       if (!prevCharacter) return prevCharacter
       const updatedCharacter = { ...prevCharacter, ...updates } as CharacterType
-      
+
       // Clear existing timeout
       if (updateSheetsTimeoutRef.current) {
         clearTimeout(updateSheetsTimeoutRef.current)
       }
-      
+
       // Update sheets array asynchronously to avoid blocking input
       updateSheetsTimeoutRef.current = setTimeout(() => {
         setSheets((prevSheets) => {
           const currentActiveSheetId = activeSheetIdRef.current
           if (!currentActiveSheetId) return prevSheets
-          
+
           const updatedSheets = prevSheets.map((sheet) =>
             sheet.id === currentActiveSheetId
               ? {
@@ -308,7 +312,7 @@ export default function CharacterSheet() {
           return updatedSheets
         })
       }, 100)
-      
+
       return updatedCharacter
     })
   }, [])
@@ -863,9 +867,12 @@ export default function CharacterSheet() {
       <div className="character-sheet flex items-center justify-center min-h-screen">
         <div className="text-center space-y-4">
           <div className="relative">
-            <Dice6 className="w-16 h-16 mx-auto text-primary animate-spin" style={{ animationDuration: '2s' }} />
+            <Dice6 className="w-16 h-16 mx-auto text-primary animate-spin" style={{ animationDuration: "2s" }} />
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" style={{ animationDuration: '1s' }} />
+              <div
+                className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"
+                style={{ animationDuration: "1s" }}
+              />
             </div>
           </div>
           <p className="text-muted-foreground font-medium animate-pulse">Carregando ficha...</p>
@@ -881,42 +888,71 @@ export default function CharacterSheet() {
   }
 
   return (
-    <div className="app">
-      <div className="sidebar-trigger" title="Mostrar fichas" onClick={() => setSidebarOpen(!sidebarOpen)}>
-        <ChevronRight className="w-4 h-4" />
-      </div>
+    <div className="app min-h-screen bg-background">
+      <button className="sidebar-trigger group" title="Mostrar fichas" onClick={() => setSidebarOpen(!sidebarOpen)}>
+        <ChevronRight className="w-5 h-5 transition-transform group-hover:translate-x-0.5" />
+      </button>
 
       <div className={cn("sidebar-overlay", sidebarOpen && "show")} onClick={() => setSidebarOpen(false)} />
 
       <div className={cn("sidebar-hidden", sidebarOpen && "show")}>
-        <div className="p-6 border-b border-sidebar-border bg-sidebar">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-sidebar-foreground">Fichas</h2>
-            <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(false)} className="h-8 w-8 p-0">
+        <div className="p-6 border-b border-sidebar-border bg-gradient-to-b from-sidebar to-sidebar/80">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <ScrollText className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-sidebar-foreground">Fichas</h2>
+                <p className="text-xs text-muted-foreground">{sheets.length} personagens</p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSidebarOpen(false)}
+              className="h-8 w-8 p-0 hover:bg-sidebar-accent"
+            >
               <X className="w-4 h-4" />
             </Button>
           </div>
-          <Button onClick={createNewSheet} className="w-full btn-primary gap-2">
+          <Button onClick={createNewSheet} className="w-full btn-primary gap-2 h-11">
             <Plus className="w-4 h-4" />
             Nova Ficha
           </Button>
         </div>
 
-        <div className="p-4 space-y-2 max-h-[calc(100vh-200px)] overflow-y-auto bg-sidebar">
+        <div className="p-4 space-y-2 max-h-[calc(100vh-200px)] overflow-y-auto">
           {sheets.map((sheet) => {
-            const sheetClassName = cn(
-              "hover-group p-3 rounded-lg border cursor-pointer transition-all duration-200",
-              sheet.id === activeSheetId
-                ? "bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-primary shadow-md"
-                : "bg-sidebar-accent/50 border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:border-sidebar-primary/50",
-            )
-
+            const isActive = sheet.id === activeSheetId
             return (
-              <div key={sheet.id} className={sheetClassName} onClick={() => switchToSheet(sheet.id)}>
-                <div className="flex items-center justify-between">
+              <div
+                key={sheet.id}
+                className={cn(
+                  "group p-4 rounded-xl border cursor-pointer transition-all duration-200",
+                  isActive
+                    ? "bg-primary/10 border-primary/50 shadow-md"
+                    : "bg-sidebar-accent/30 border-sidebar-border hover:bg-sidebar-accent/50 hover:border-primary/30",
+                )}
+                onClick={() => switchToSheet(sheet.id)}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={cn(
+                      "w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-colors",
+                      isActive
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground group-hover:bg-primary/20",
+                    )}
+                  >
+                    {(sheet.meta?.nome || "N")[0].toUpperCase()}
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium truncate">{sheet.meta?.nome || "Nova Ficha"}</p>
-                    <p className="text-xs opacity-75">Nível {sheet.meta?.nivel || 1}</p>
+                    <p className="font-semibold truncate text-sidebar-foreground">{sheet.meta?.nome || "Nova Ficha"}</p>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Crown className="w-3 h-3" />
+                      Nível {sheet.meta?.nivel || 1}
+                    </p>
                   </div>
                   <Button
                     variant="ghost"
@@ -927,9 +963,9 @@ export default function CharacterSheet() {
                         deleteSheet(sheet.id)
                       }
                     }}
-                    className="opacity-0 hover-group-show transition-opacity h-8 w-8 p-0"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
                   >
-                    <Trash2 className="w-3 h-3" />
+                    <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
@@ -939,112 +975,177 @@ export default function CharacterSheet() {
       </div>
 
       <div className="main-content-new">
-        <div className="flex justify-end mb-4">
-          <AnimatedThemeToggler className="h-9 w-9 rounded-md bg-background hover:bg-accent hover:text-accent-foreground" />
-        </div>
-
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-8 gap-4">
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
           <div className="flex items-center gap-4">
-            <div className="relative">
-              <div
-                className="character-photo bg-muted rounded-full w-16 h-16 flex items-center justify-center cursor-pointer hover:bg-muted/80 transition-colors relative overflow-hidden"
-                onClick={openPhotoEditModal}
-              >
-                {character?.foto ? (
-                  <img
-                    src={typeof character.foto === "object" ? character.foto.src : character.foto}
-                    alt="Foto do personagem"
-                    className="w-full h-full object-cover"
-                    style={{
-                      transform:
-                        typeof character.foto === "object" && character.foto.zoom !== 1
-                          ? `translate(${(character.foto.offsetX || 0) * 100}%, ${(character.foto.offsetY || 0) * 100}%) scale(${character.foto.zoom || 1})`
-                          : "none",
-                    }}
-                  />
-                ) : (
-                  <Camera className="w-8 h-8 text-muted-foreground" />
-                )}
-              </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full p-0"
-                onClick={openPhotoEditModal}
-              >
-                <Settings className="w-3 h-3" />
-              </Button>
+            <div
+              className="character-photo bg-muted flex items-center justify-center cursor-pointer"
+              onClick={openPhotoEditModal}
+            >
+              {character?.foto ? (
+                <img
+                  src={typeof character.foto === "object" ? character.foto.src : character.foto}
+                  alt="Foto do personagem"
+                  className="w-full h-full object-cover"
+                  style={{
+                    transform:
+                      typeof character.foto === "object" && character.foto.zoom !== 1
+                        ? `translate(${(character.foto.offsetX || 0) * 100}%, ${(character.foto.offsetY || 0) * 100}%) scale(${character.foto.zoom || 1})`
+                        : "none",
+                  }}
+                />
+              ) : (
+                <Camera className="w-8 h-8 text-muted-foreground" />
+              )}
             </div>
 
             <div>
-              <h1 className="text-3xl font-bold text-foreground mb-1 tracking-tight">{character?.nome || "Ficha de Personagem"}</h1>
-              <p className="text-muted-foreground text-sm font-medium">
-                {character?.raca || ""} • Nível {getTotalLevel()}
-              </p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
+                {character?.nome || "Novo Personagem"}
+              </h1>
+              <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+                {character?.raca && (
+                  <span className="flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {character.raca}
+                  </span>
+                )}
+                {character?.classes?.length > 0 && (
+                  <span className="flex items-center gap-1">
+                    <Sword className="w-3.5 h-3.5" />
+                    {character.classes.map((c: any) => `${c.nome || "Classe"} ${c.nivel || 1}`).join(", ")}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="gap-2">
-              <Upload className="w-4 h-4" />
-              <span className="hidden sm:inline">Importar</span>
-            </Button>
-            <Button onClick={exportCharacter} className="gap-2">
-              <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">Exportar</span>
-            </Button>
-            <input ref={fileInputRef} type="file" accept=".json" onChange={handleFileImport} className="hidden" />
+          <div className="flex items-center gap-2">
+            <AnimatedThemeToggler className="h-10 w-10 rounded-lg bg-muted hover:bg-accent transition-colors" />
           </div>
+        </header>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <Card className="p-4 bg-gradient-to-br from-red-500/10 to-red-600/5 border-red-500/20">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
+                <Heart className="w-5 h-5 text-red-500" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Vida</p>
+                <p className="text-lg font-bold text-foreground">
+                  {character?.recursos?.vida?.atual || 0}/{character?.recursos?.vida?.maximo || 0}
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-4 bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-blue-500" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Mana</p>
+                <p className="text-lg font-bold text-foreground">
+                  {character?.recursos?.mana?.atual || 0}/{character?.recursos?.mana?.maximo || 0}
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-4 bg-gradient-to-br from-amber-500/10 to-amber-600/5 border-amber-500/20">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                <Shield className="w-5 h-5 text-amber-500" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Defesa</p>
+                <p className="text-lg font-bold text-foreground">{calculateDefense()}</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-4 bg-gradient-to-br from-purple-500/10 to-purple-600/5 border-purple-500/20">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                <Crown className="w-5 h-5 text-purple-500" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Nível</p>
+                <p className="text-lg font-bold text-foreground">{getTotalLevel()}</p>
+              </div>
+            </div>
+          </Card>
         </div>
 
-        {/* Tabs and Sidebar */}
         <Tabs defaultValue="basic-info" className="w-full">
-          <TabsList className="sticky top-0 z-40 flex flex-row gap-2 p-4 bg-background border-b border-border w-full">
-            <div className="text-sm font-semibold text-muted-foreground mr-4 flex items-center">Navegação</div>
-            <TabsTrigger value="basic-info" className="justify-start whitespace-nowrap">
+          <TabsList className="sticky top-0 z-40 flex flex-row gap-1 p-2 bg-muted/80 backdrop-blur-sm border border-border rounded-xl w-full overflow-x-auto mb-6">
+            <TabsTrigger
+              value="basic-info"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"
+            >
               <Settings className="w-4 h-4" />
-              Básico
+              <span className="hidden sm:inline">Básico</span>
             </TabsTrigger>
-            <TabsTrigger value="attributes" className="justify-start whitespace-nowrap">
+            <TabsTrigger
+              value="attributes"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"
+            >
               <Dice6 className="w-4 h-4" />
-              Atributos
+              <span className="hidden sm:inline">Atributos</span>
             </TabsTrigger>
-            <TabsTrigger value="defense" className="justify-start whitespace-nowrap">
+            <TabsTrigger
+              value="defense"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"
+            >
               <Shield className="w-4 h-4" />
-              Defesa
+              <span className="hidden sm:inline">Defesa</span>
             </TabsTrigger>
-            <TabsTrigger value="skills" className="justify-start whitespace-nowrap">
+            <TabsTrigger
+              value="skills"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"
+            >
               <BookOpen className="w-4 h-4" />
-              Perícias
+              <span className="hidden sm:inline">Perícias</span>
             </TabsTrigger>
-            <TabsTrigger value="abilities" className="justify-start whitespace-nowrap">
+            <TabsTrigger
+              value="abilities"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"
+            >
               <Zap className="w-4 h-4" />
-              Habilidades
+              <span className="hidden sm:inline">Habilidades</span>
             </TabsTrigger>
-            <TabsTrigger value="powers" className="justify-start whitespace-nowrap">
-              <Zap className="w-4 h-4" />
-              Poderes
+            <TabsTrigger
+              value="powers"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span className="hidden sm:inline">Poderes</span>
             </TabsTrigger>
-            <TabsTrigger value="magic" className="justify-start whitespace-nowrap">
-              <BookOpen className="w-4 h-4" />
-              Magias
+            <TabsTrigger
+              value="magic"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"
+            >
+              <ScrollText className="w-4 h-4" />
+              <span className="hidden sm:inline">Magias</span>
             </TabsTrigger>
-            <TabsTrigger value="inventory" className="justify-start whitespace-nowrap">
+            <TabsTrigger
+              value="inventory"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"
+            >
               <Package className="w-4 h-4" />
-              Inventário
+              <span className="hidden sm:inline">Inventário</span>
             </TabsTrigger>
           </TabsList>
 
           <div>
-            {/* Main content area */}
             {/* Basic Information Tab */}
-            <TabsContent value="basic-info" className="mt-6">
+            <TabsContent value="basic-info" className="mt-0">
               <Card id="basic-info" key="basic-info" className="section-card">
                 <Collapsible open={!collapsedSections["basic-info"]} onOpenChange={() => toggleSection("basic-info")}>
                   <CollapsibleTrigger className="section-header w-full">
                     <h2 className="section-title">
-                      <Settings className="w-5 h-5" />
+                      <Settings className="w-5 h-5 text-primary" />
                       Informações Básicas
                     </h2>
                     <ChevronDown
@@ -1174,12 +1275,12 @@ export default function CharacterSheet() {
               </Card>
             </TabsContent>
             {/* Attributes Tab */}
-            <TabsContent value="attributes" className="mt-6">
+            <TabsContent value="attributes" className="mt-0">
               <Card id="attributes" key="attributes" className="section-card">
                 <Collapsible open={!collapsedSections["attributes"]} onOpenChange={() => toggleSection("attributes")}>
                   <CollapsibleTrigger className="section-header w-full">
                     <h2 className="section-title">
-                      <Dice6 className="w-5 h-5" />
+                      <Dice6 className="w-5 h-5 text-primary" />
                       Atributos
                     </h2>
                     <ChevronDown
@@ -1225,14 +1326,14 @@ export default function CharacterSheet() {
               </Card>
             </TabsContent>
             {/* Resources Tab (integrated into main content, no specific Tab value) */}
-            <div className="mt-6">
+            <div className="mt-0">
               {" "}
               {/* Wrap in a div as it's not a direct TabsContent */}
               <Card className="section-card">
                 <Collapsible open={!collapsedSections["resources"]} onOpenChange={() => toggleSection("resources")}>
                   <CollapsibleTrigger className="section-header w-full">
                     <h2 className="section-title">
-                      <Zap className="w-5 h-5" />
+                      <Zap className="w-5 h-5 text-primary" />
                       Recursos
                     </h2>
                     <ChevronDown
@@ -1441,12 +1542,12 @@ export default function CharacterSheet() {
               </Card>
             </div>
             {/* Defense Tab */}
-            <TabsContent value="defense" className="mt-6">
+            <TabsContent value="defense" className="mt-0">
               <Card id="defense" key="defense" className="section-card">
                 <Collapsible open={!collapsedSections["defense"]} onOpenChange={() => toggleSection("defense")}>
                   <CollapsibleTrigger className="section-header w-full">
                     <h2 className="section-title">
-                      <Shield className="w-5 h-5" />
+                      <Shield className="w-5 h-5 text-primary" />
                       Defesa
                     </h2>
                     <ChevronDown
@@ -1612,12 +1713,12 @@ export default function CharacterSheet() {
               </Card>
             </TabsContent>
             {/* Skills Tab */}
-            <TabsContent value="skills" className="mt-6">
+            <TabsContent value="skills" className="mt-0">
               <Card id="skills" key="skills" className="section-card">
                 <Collapsible open={!collapsedSections["skills"]} onOpenChange={() => toggleSection("skills")}>
                   <CollapsibleTrigger className="section-header w-full">
                     <h2 className="section-title">
-                      <BookOpen className="w-5 h-5" />
+                      <BookOpen className="w-5 h-5 text-primary" />
                       Perícias
                     </h2>
                     <ChevronDown
@@ -1923,12 +2024,12 @@ export default function CharacterSheet() {
               </Card>
             </TabsContent>
             {/* Abilities Tab */}
-            <TabsContent value="abilities" className="mt-6">
+            <TabsContent value="abilities" className="mt-0">
               <Card id="abilities" key="abilities" className="section-card">
                 <Collapsible open={!collapsedSections["abilities"]} onOpenChange={() => toggleSection("abilities")}>
                   <CollapsibleTrigger className="section-header w-full">
                     <h2 className="section-title">
-                      <Zap className="w-5 h-5" />
+                      <Zap className="w-5 h-5 text-primary" />
                       Habilidades
                     </h2>
                     <ChevronDown
@@ -2004,12 +2105,12 @@ export default function CharacterSheet() {
               </Card>
             </TabsContent>
             {/* Powers Tab */}
-            <TabsContent value="powers" className="mt-6">
+            <TabsContent value="powers" className="mt-0">
               <Card id="powers" key="powers" className="section-card">
                 <Collapsible open={!collapsedSections["powers"]} onOpenChange={() => toggleSection("powers")}>
                   <CollapsibleTrigger className="section-header w-full">
                     <h2 className="section-title">
-                      <Zap className="w-5 h-5" />
+                      <Sparkles className="w-5 h-5 text-primary" />
                       Poderes
                     </h2>
                     <ChevronDown
@@ -2108,12 +2209,12 @@ export default function CharacterSheet() {
               </Card>
             </TabsContent>
             {/* Magic Tab */}
-            <TabsContent value="magic" className="mt-6">
+            <TabsContent value="magic" className="mt-0">
               <Card id="magic" key="magic" className="section-card">
                 <Collapsible open={!collapsedSections["magic"]} onOpenChange={() => toggleSection("magic")}>
                   <CollapsibleTrigger className="section-header w-full">
                     <h2 className="section-title">
-                      <BookOpen className="w-5 h-5" />
+                      <ScrollText className="w-5 h-5 text-primary" />
                       Magias
                     </h2>
                     <ChevronDown
@@ -2322,12 +2423,12 @@ export default function CharacterSheet() {
               </Card>
             </TabsContent>
             {/* Inventory Tab */}
-            <TabsContent value="inventory" className="mt-6">
+            <TabsContent value="inventory" className="mt-0">
               <Card id="inventory" key="inventory" className="section-card">
                 <Collapsible open={!collapsedSections["inventory"]} onOpenChange={() => toggleSection("inventory")}>
                   <CollapsibleTrigger className="section-header w-full">
                     <h2 className="section-title">
-                      <Package className="w-5 h-5" />
+                      <Package className="w-5 h-5 text-primary" />
                       Inventário
                     </h2>
                     <ChevronDown
@@ -2465,7 +2566,7 @@ export default function CharacterSheet() {
                                       const newValue = e.target.value
                                       const newWeapons = [...(character?.inventario?.armas || [])]
                                       newWeapons[index] = { ...weapon, nome: newValue }
-                                      
+
                                       // Update character state immediately
                                       setCharacter((prev) => {
                                         if (!prev) return prev
@@ -2474,7 +2575,7 @@ export default function CharacterSheet() {
                                           inventario: { ...(prev.inventario || {}), armas: newWeapons },
                                         }
                                       })
-                                      
+
                                       // Debounce sheets update to avoid blocking
                                       if (updateInventoryTimeoutRef.current) {
                                         clearTimeout(updateInventoryTimeoutRef.current)
@@ -2484,7 +2585,7 @@ export default function CharacterSheet() {
                                         setSheets((prevSheets) => {
                                           const currentActiveSheetId = activeSheetIdRef.current
                                           if (!currentActiveSheetId) return prevSheets
-                                          
+
                                           return prevSheets.map((sheet) =>
                                             sheet.id === currentActiveSheetId
                                               ? {
@@ -2493,7 +2594,10 @@ export default function CharacterSheet() {
                                                     ...sheet.data,
                                                     inventario: updatedInventory,
                                                   },
-                                                  meta: { nome: sheet.data.nome || "Nova Ficha", nivel: getTotalLevel(sheet.data) },
+                                                  meta: {
+                                                    nome: sheet.data.nome || "Nova Ficha",
+                                                    nivel: getTotalLevel(sheet.data),
+                                                  },
                                                 }
                                               : sheet,
                                           )
@@ -2758,7 +2862,7 @@ export default function CharacterSheet() {
                                       const newValue = e.target.value
                                       const newArmors = [...(character.inventario?.armaduras || [])]
                                       newArmors[index] = { ...armor, nome: newValue }
-                                      
+
                                       // Update character state immediately
                                       setCharacter((prev) => {
                                         if (!prev) return prev
@@ -2767,17 +2871,20 @@ export default function CharacterSheet() {
                                           inventario: { ...(prev.inventario || {}), armaduras: newArmors },
                                         }
                                       })
-                                      
+
                                       // Debounce sheets update to avoid blocking
                                       if (updateInventoryTimeoutRef.current) {
                                         clearTimeout(updateInventoryTimeoutRef.current)
                                       }
-                                      const updatedInventory = { ...(character?.inventario || {}), armaduras: newArmors }
+                                      const updatedInventory = {
+                                        ...(character?.inventario || {}),
+                                        armaduras: newArmors,
+                                      }
                                       updateInventoryTimeoutRef.current = setTimeout(() => {
                                         setSheets((prevSheets) => {
                                           const currentActiveSheetId = activeSheetIdRef.current
                                           if (!currentActiveSheetId) return prevSheets
-                                          
+
                                           return prevSheets.map((sheet) =>
                                             sheet.id === currentActiveSheetId
                                               ? {
@@ -2786,7 +2893,10 @@ export default function CharacterSheet() {
                                                     ...sheet.data,
                                                     inventario: updatedInventory,
                                                   },
-                                                  meta: { nome: sheet.data.nome || "Nova Ficha", nivel: getTotalLevel(sheet.data) },
+                                                  meta: {
+                                                    nome: sheet.data.nome || "Nova Ficha",
+                                                    nivel: getTotalLevel(sheet.data),
+                                                  },
                                                 }
                                               : sheet,
                                           )
@@ -2964,7 +3074,7 @@ export default function CharacterSheet() {
                                       const newValue = e.target.value
                                       const newItems = [...(character?.inventario?.itens || [])]
                                       newItems[index] = { ...item, nome: newValue }
-                                      
+
                                       // Update character state immediately
                                       setCharacter((prev) => {
                                         if (!prev) return prev
@@ -2973,7 +3083,7 @@ export default function CharacterSheet() {
                                           inventario: { ...(prev.inventario || {}), itens: newItems },
                                         }
                                       })
-                                      
+
                                       // Debounce sheets update to avoid blocking
                                       if (updateInventoryTimeoutRef.current) {
                                         clearTimeout(updateInventoryTimeoutRef.current)
@@ -2983,7 +3093,7 @@ export default function CharacterSheet() {
                                         setSheets((prevSheets) => {
                                           const currentActiveSheetId = activeSheetIdRef.current
                                           if (!currentActiveSheetId) return prevSheets
-                                          
+
                                           return prevSheets.map((sheet) =>
                                             sheet.id === currentActiveSheetId
                                               ? {
@@ -2992,7 +3102,10 @@ export default function CharacterSheet() {
                                                     ...sheet.data,
                                                     inventario: updatedInventory,
                                                   },
-                                                  meta: { nome: sheet.data.nome || "Nova Ficha", nivel: getTotalLevel(sheet.data) },
+                                                  meta: {
+                                                    nome: sheet.data.nome || "Nova Ficha",
+                                                    nivel: getTotalLevel(sheet.data),
+                                                  },
                                                 }
                                               : sheet,
                                           )
