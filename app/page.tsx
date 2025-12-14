@@ -1079,7 +1079,7 @@ export default function CharacterSheet() {
         </div>
 
         <Tabs defaultValue="basic-info" className="w-full">
-          <TabsList className="sticky top-0 z-40 flex flex-row gap-1 p-2 bg-muted/80 backdrop-blur-sm border border-border rounded-xl w-full overflow-x-auto mb-6">
+          <TabsList className="sticky top-0 z-40 flex flex-row gap-1 p-2 bg-muted/80 backdrop-blur-sm border border-border rounded-xl w-full overflow-x-auto overflow-y-hidden mb-6">
             <TabsTrigger
               value="basic-info"
               className="flex items-center gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"
