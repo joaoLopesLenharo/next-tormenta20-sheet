@@ -6,11 +6,21 @@ export async function updateSession(request: NextRequest) {
     request,
   })
 
+  // Verifica se as variáveis de ambiente do Supabase estão configuradas
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  // Se as variáveis não estiverem configuradas, permite acesso sem autenticação
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.warn('[Middleware] Supabase environment variables not configured. Skipping auth check.')
+    return supabaseResponse
+  }
+
   // With Fluid compute, don't put this client in a global environment
   // variable. Always create a new one on each request.
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {
