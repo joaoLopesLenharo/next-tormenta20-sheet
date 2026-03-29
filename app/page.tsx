@@ -37,6 +37,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
 import { DiceRoller } from "@/components/dice-roller"
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler"
+import Link from "next/link"
+import { Users } from "lucide-react"
 
 // TypeScript interfaces
 interface CharacterType {
@@ -946,6 +948,12 @@ export default function CharacterSheet() {
             </Button>
           </div>
           <div className="space-y-2">
+          <Link href="/campanhas">
+            <Button variant="outline" className="w-full gap-2 h-11 mb-2 border-accent/50 hover:bg-accent/10">
+              <Users className="w-4 h-4 text-accent" />
+              Campanhas Online
+            </Button>
+          </Link>
           <Button onClick={createNewSheet} className="w-full btn-primary gap-2 h-11">
             <Plus className="w-4 h-4" />
             Nova Ficha
