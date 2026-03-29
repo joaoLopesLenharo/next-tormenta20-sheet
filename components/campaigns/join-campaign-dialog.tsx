@@ -134,7 +134,7 @@ export function JoinCampaignDialog({ children, userId, onSuccess }: JoinCampaign
                     .slice(0, 8)
                   setInviteCode(v)
                 }}
-                className="form-input font-mono uppercase"
+                className="form-input font-mono"
                 maxLength={8}
                 required
               />
