@@ -17,10 +17,6 @@ import { LogoutButton } from '@/components/auth/logout-button'
 import { CampaignCard } from '@/components/campaigns/campaign-card'
 import type { Campaign, CampaignMember } from '@/lib/types/database'
 
-interface CampaignWithDetails extends Campaign {
-  campaign_members: { count: number }[]
-}
-
 interface MembershipWithCampaign extends CampaignMember {
   campaigns: Campaign
 }
@@ -35,7 +31,7 @@ export default async function CampanhasPage() {
   }
 
   // Buscar campanhas onde o usuario eh mestre
-  const { data: myCampaigns, error: myCampaignsError } = await supabase
+  const { data: myCampaigns } = await supabase
     .from('campaigns')
     .select('id, name, description, status, created_at, updated_at, master_id, invite_code')
     .eq('master_id', user.id)
@@ -44,7 +40,7 @@ export default async function CampanhasPage() {
   // Buscar campanhas onde o usuario eh jogador
   const { data: memberships } = await supabase
     .from('campaign_members')
-    .select('id, user_id, campaign_id, role, joined_at')
+    .select('id, user_id, campaign_id, character_name, joined_at')
     .eq('user_id', user.id)
 
   // Buscar detalhes das campanhas onde eh jogador
@@ -136,7 +132,7 @@ export default async function CampanhasPage() {
 
           {myCampaigns && myCampaigns.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {(myCampaigns as CampaignWithDetails[]).map((campaign) => (
+              {myCampaigns.map((campaign) => (
                 <CampaignCard
                   key={campaign.id}
                   campaign={campaign}

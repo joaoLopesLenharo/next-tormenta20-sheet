@@ -15,6 +15,29 @@ CREATE POLICY "campaigns_members_select" ON public.campaigns
   );
 
 -- CAMPAIGN MEMBERS POLICIES
+-- Função SECURITY DEFINER: checa linha em campaign_members sem re-aplicar RLS
+-- na mesma tabela (evita 42P17 infinite recursion na policy antiga).
+CREATE OR REPLACE FUNCTION public.campaign_member_exists(
+  p_user_id uuid,
+  p_campaign_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.campaign_members
+    WHERE campaign_id = p_campaign_id
+      AND user_id = p_user_id
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.campaign_member_exists(uuid, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.campaign_member_exists(uuid, uuid) TO authenticated;
+
 CREATE POLICY "campaign_members_master_all" ON public.campaign_members 
   FOR ALL USING (
     EXISTS (
@@ -25,10 +48,7 @@ CREATE POLICY "campaign_members_master_all" ON public.campaign_members
 
 CREATE POLICY "campaign_members_select" ON public.campaign_members 
   FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM public.campaign_members cm 
-      WHERE cm.campaign_id = campaign_members.campaign_id AND cm.user_id = auth.uid()
-    )
+    public.campaign_member_exists(auth.uid(), campaign_id)
   );
 
 CREATE POLICY "campaign_members_insert_self" ON public.campaign_members 
