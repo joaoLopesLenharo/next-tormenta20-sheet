@@ -35,20 +35,38 @@ export default async function CampanhasPage() {
   }
 
   // Buscar campanhas onde o usuario eh mestre
-  const { data: myCampaigns } = await supabase
+  const { data: myCampaigns, error: myCampaignsError } = await supabase
     .from('campaigns')
-    .select('*, campaign_members(count)')
+    .select('id, name, description, status, created_at, updated_at, master_id, invite_code')
     .eq('master_id', user.id)
     .order('created_at', { ascending: false })
 
   // Buscar campanhas onde o usuario eh jogador
   const { data: memberships } = await supabase
     .from('campaign_members')
-    .select('*, campaigns(*)')
+    .select('id, user_id, campaign_id, role, joined_at')
     .eq('user_id', user.id)
 
+  // Buscar detalhes das campanhas onde eh jogador
+  let participatingCampaignsData: Campaign[] = []
+  if (memberships && memberships.length > 0) {
+    const campaignIds = memberships.map((m) => m.campaign_id)
+    const { data: campaignsData } = await supabase
+      .from('campaigns')
+      .select('id, name, description, status, created_at, updated_at, master_id, invite_code')
+      .in('id', campaignIds)
+    
+    participatingCampaignsData = campaignsData || []
+  }
+
   // Filtrar para nao incluir campanhas onde eh mestre
-  const participatingCampaigns = memberships?.filter(
+  const participatingCampaigns = memberships?.map((m) => {
+    const campaign = participatingCampaignsData.find((c) => c.id === m.campaign_id)
+    return {
+      ...m,
+      campaigns: campaign || ({} as Campaign),
+    }
+  }).filter(
     (m: MembershipWithCampaign) => m.campaigns.master_id !== user.id
   ) || []
 
