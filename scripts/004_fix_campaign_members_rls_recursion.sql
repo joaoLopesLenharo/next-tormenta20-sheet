@@ -27,6 +27,8 @@ $$;
 REVOKE ALL ON FUNCTION public.campaign_member_exists(uuid, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.campaign_member_exists(uuid, uuid) TO authenticated;
 
+ALTER FUNCTION public.campaign_member_exists(uuid, uuid) OWNER TO postgres;
+
 DROP POLICY IF EXISTS "campaign_members_select" ON public.campaign_members;
 
 CREATE POLICY "campaign_members_select" ON public.campaign_members
@@ -34,5 +36,5 @@ CREATE POLICY "campaign_members_select" ON public.campaign_members
     public.campaign_member_exists(auth.uid(), campaign_id)
   );
 
--- Observação: mestres continuam com FOR ALL em "campaign_members_master_all"
--- (consulta só public.campaigns, sem recursão). As políticas permissivas são OR.
+-- Depois rode também scripts/005_campaigns_policies_use_member_function.sql
+-- para trocar subconsultas em campaign_members nas políticas de campaigns/sessions/dice_rolls.

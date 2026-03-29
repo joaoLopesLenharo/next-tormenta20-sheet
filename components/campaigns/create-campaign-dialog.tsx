@@ -17,12 +17,14 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Loader2 } from 'lucide-react'
+import { revalidateCampanhasPage } from '@/app/campanhas/actions'
 
 interface CreateCampaignDialogProps {
   children: ReactNode
+  onSuccess?: () => void | Promise<void>
 }
 
-export function CreateCampaignDialog({ children }: CreateCampaignDialogProps) {
+export function CreateCampaignDialog({ children, onSuccess }: CreateCampaignDialogProps) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -65,9 +67,12 @@ export function CreateCampaignDialog({ children }: CreateCampaignDialogProps) {
       return
     }
 
+    await revalidateCampanhasPage()
+    await onSuccess?.()
     setOpen(false)
     setName('')
     setDescription('')
+    setLoading(false)
     router.refresh()
   }
 

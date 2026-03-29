@@ -20,9 +20,10 @@ import { Loader2 } from 'lucide-react'
 interface JoinCampaignDialogProps {
   children: ReactNode
   userId: string
+  onSuccess?: () => void | Promise<void>
 }
 
-export function JoinCampaignDialog({ children, userId }: JoinCampaignDialogProps) {
+export function JoinCampaignDialog({ children, userId, onSuccess }: JoinCampaignDialogProps) {
   const [open, setOpen] = useState(false)
   const [inviteCode, setInviteCode] = useState('')
   const [characterName, setCharacterName] = useState('')
@@ -97,9 +98,11 @@ export function JoinCampaignDialog({ children, userId }: JoinCampaignDialogProps
       return
     }
 
+    await onSuccess?.()
     setOpen(false)
     setInviteCode('')
     setCharacterName('')
+    setLoading(false)
     router.refresh()
   }
 

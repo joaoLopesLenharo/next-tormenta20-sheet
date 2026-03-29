@@ -1,22 +1,8 @@
 -- ============================================
 -- RLS POLICIES
 -- ============================================
+-- A função deve existir antes das políticas que a referenciam.
 
--- CAMPAIGNS POLICIES
-CREATE POLICY "campaigns_master_all" ON public.campaigns 
-  FOR ALL USING (auth.uid() = master_id);
-
-CREATE POLICY "campaigns_members_select" ON public.campaigns 
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM public.campaign_members 
-      WHERE campaign_id = campaigns.id AND user_id = auth.uid()
-    )
-  );
-
--- CAMPAIGN MEMBERS POLICIES
--- Função SECURITY DEFINER: checa linha em campaign_members sem re-aplicar RLS
--- na mesma tabela (evita 42P17 infinite recursion na policy antiga).
 CREATE OR REPLACE FUNCTION public.campaign_member_exists(
   p_user_id uuid,
   p_campaign_id uuid
@@ -35,9 +21,21 @@ AS $$
   );
 $$;
 
+ALTER FUNCTION public.campaign_member_exists(uuid, uuid) OWNER TO postgres;
+
 REVOKE ALL ON FUNCTION public.campaign_member_exists(uuid, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.campaign_member_exists(uuid, uuid) TO authenticated;
 
+-- CAMPAIGNS POLICIES
+CREATE POLICY "campaigns_master_all" ON public.campaigns 
+  FOR ALL USING (auth.uid() = master_id);
+
+CREATE POLICY "campaigns_members_select" ON public.campaigns 
+  FOR SELECT USING (
+    public.campaign_member_exists(auth.uid(), id)
+  );
+
+-- CAMPAIGN MEMBERS POLICIES
 CREATE POLICY "campaign_members_master_all" ON public.campaign_members 
   FOR ALL USING (
     EXISTS (
@@ -68,10 +66,7 @@ CREATE POLICY "sessions_master_all" ON public.sessions
 
 CREATE POLICY "sessions_members_select" ON public.sessions 
   FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM public.campaign_members 
-      WHERE campaign_id = sessions.campaign_id AND user_id = auth.uid()
-    )
+    public.campaign_member_exists(auth.uid(), campaign_id)
   );
 
 -- DICE ROLLS POLICIES
@@ -92,8 +87,8 @@ CREATE POLICY "dice_rolls_select_non_secret" ON public.dice_rolls
     is_secret = FALSE AND
     EXISTS (
       SELECT 1 FROM public.sessions s
-      JOIN public.campaign_members cm ON cm.campaign_id = s.campaign_id
-      WHERE s.id = dice_rolls.session_id AND cm.user_id = auth.uid()
+      WHERE s.id = dice_rolls.session_id
+        AND public.campaign_member_exists(auth.uid(), s.campaign_id)
     )
   );
 
