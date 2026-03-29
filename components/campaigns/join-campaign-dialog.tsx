@@ -45,14 +45,23 @@ export function JoinCampaignDialog({ children, userId, onSuccess }: JoinCampaign
 
     const supabase = createClient()
 
-    // Buscar campanha pelo codigo
-    const { data: campaign, error: findError } = await supabase
-      .from('campaigns')
-      .select('id, master_id, status')
-      .eq('invite_code', normalizeInviteCodeForLookup(inviteCode))
-      .single()
+    // Buscar campanha pelo codigo usando RPC (SECURITY DEFINER)
+    // Necessário porque o jogador ainda não é membro, e o RLS
+    // bloqueia SELECT direto na tabela campaigns.
+    const normalizedCode = normalizeInviteCodeForLookup(inviteCode)
+    console.log('[JoinCampaign] Buscando campanha com código:', normalizedCode)
+
+    const { data: campaigns, error: findError } = await supabase
+      .rpc('find_campaign_by_invite_code', {
+        p_invite_code: normalizedCode,
+      })
+
+    console.log('[JoinCampaign] Resposta RPC:', { data: campaigns, error: findError })
+
+    const campaign = Array.isArray(campaigns) ? campaigns[0] : campaigns
 
     if (findError || !campaign) {
+      console.error('[JoinCampaign] Erro ao buscar campanha:', findError, '| data:', campaigns)
       setError('Campanha nao encontrada. Verifique o codigo.')
       setLoading(false)
       return

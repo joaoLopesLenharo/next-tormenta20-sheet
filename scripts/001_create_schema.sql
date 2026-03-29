@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS public.campaigns (
   name TEXT NOT NULL,
   description TEXT,
   cover_image_url TEXT,
-  invite_code TEXT UNIQUE NOT NULL DEFAULT upper(substring(md5(random()::text), 1, 8)),
+  invite_code TEXT UNIQUE NOT NULL DEFAULT lower(substring(md5(random()::text), 1, 8)),
   status TEXT NOT NULL DEFAULT 'ativa' CHECK (status IN ('ativa', 'pausada', 'encerrada')),
   master_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

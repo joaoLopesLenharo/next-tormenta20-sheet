@@ -1,4 +1,4 @@
--- Novos códigos em MAIÚSCULAS (igual à UI). Linhas antigas continuam válidas
--- (join usa comparação em minúsculas via app).
+-- Padroniza códigos em minúsculas (consistente com a busca no app).
+-- Linhas antigas continuam válidas.
 ALTER TABLE public.campaigns
-  ALTER COLUMN invite_code SET DEFAULT upper(substring(md5(random()::text), 1, 8));
+  ALTER COLUMN invite_code SET DEFAULT lower(substring(md5(random()::text), 1, 8));

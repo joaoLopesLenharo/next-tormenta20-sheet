@@ -96,3 +96,34 @@ CREATE POLICY "dice_rolls_select_own_secret" ON public.dice_rolls
   FOR SELECT USING (
     auth.uid() = user_id
   );
+
+-- ============================================
+-- FUNÇÃO PARA BUSCAR CAMPANHA POR INVITE CODE
+-- ============================================
+-- Necessária porque um jogador que quer entrar numa campanha
+-- ainda não é membro, então as políticas RLS (campaigns_master_all
+-- e campaigns_members_select) bloqueiam o SELECT.
+-- Esta função SECURITY DEFINER contorna o RLS e retorna apenas
+-- os campos necessários (id, master_id, status).
+
+CREATE OR REPLACE FUNCTION public.find_campaign_by_invite_code(p_invite_code text)
+RETURNS TABLE (
+  id uuid,
+  master_id uuid,
+  status text
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT c.id, c.master_id, c.status::text
+  FROM public.campaigns c
+  WHERE c.invite_code = p_invite_code
+  LIMIT 1;
+$$;
+
+ALTER FUNCTION public.find_campaign_by_invite_code(text) OWNER TO postgres;
+
+REVOKE ALL ON FUNCTION public.find_campaign_by_invite_code(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.find_campaign_by_invite_code(text) TO authenticated;
