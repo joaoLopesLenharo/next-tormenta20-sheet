@@ -37,9 +37,11 @@ import {
   Loader2,
   Eye,
   EyeOff,
+  History,
 } from 'lucide-react'
 import { DiceRollCard } from '@/components/dice/dice-roll-card'
 import { MasterDiceRoller } from '@/components/dice/master-dice-roller'
+import { ManageMembersDialog } from '@/components/campaigns/manage-members-dialog'
 import type { Campaign, Session, DiceRoll, CampaignMember, Profile } from '@/lib/types/database'
 
 interface MemberWithProfile extends CampaignMember {
@@ -190,6 +192,12 @@ export function MasterPanel({
             </div>
             
             <div className="flex items-center gap-2">
+              <Link href={`/campanhas/${campaign.id}/historico`}>
+                <Button variant="ghost" size="sm">
+                  <History className="w-4 h-4 mr-2" />
+                  Histórico
+                </Button>
+              </Link>
               <Button
                 variant="outline"
                 size="sm"
@@ -292,10 +300,19 @@ export function MasterPanel({
             {/* Jogadores */}
             <Card className="section-card">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="w-5 h-5 text-primary" />
-                  Jogadores ({members.length})
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="w-5 h-5 text-primary" />
+                    Jogadores ({members.length})
+                  </CardTitle>
+                  {members.length > 0 && (
+                    <ManageMembersDialog
+                      campaignId={campaign.id}
+                      members={members}
+                      onMembersChange={() => router.refresh()}
+                    />
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {members.length > 0 ? (

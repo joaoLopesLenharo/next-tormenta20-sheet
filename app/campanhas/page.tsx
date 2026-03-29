@@ -10,10 +10,11 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Users, Crown, Swords, LogOut } from 'lucide-react'
+import { Plus, Users, Crown, Swords, LogOut, User } from 'lucide-react'
 import { CreateCampaignDialog } from '@/components/campaigns/create-campaign-dialog'
 import { JoinCampaignDialog } from '@/components/campaigns/join-campaign-dialog'
 import { LogoutButton } from '@/components/auth/logout-button'
+import { CampaignCard } from '@/components/campaigns/campaign-card'
 import type { Campaign, CampaignMember } from '@/lib/types/database'
 
 interface CampaignWithDetails extends Campaign {
@@ -73,10 +74,15 @@ export default async function CampanhasPage() {
             <Swords className="w-8 h-8 text-primary" />
             <h1 className="text-xl font-bold">Tormenta 20</h1>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground hidden sm:block">
               {user.email}
             </span>
+            <Link href="/perfil">
+              <Button variant="ghost" size="sm">
+                <User className="w-4 h-4" />
+              </Button>
+            </Link>
             <LogoutButton />
           </div>
         </div>
@@ -113,34 +119,12 @@ export default async function CampanhasPage() {
           {myCampaigns && myCampaigns.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {(myCampaigns as CampaignWithDetails[]).map((campaign) => (
-                <Link key={campaign.id} href={`/campanhas/${campaign.id}/mestre`}>
-                  <Card className="section-card h-full hover:border-primary/50 transition-colors cursor-pointer">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <CardTitle className="text-lg line-clamp-1">
-                          {campaign.name}
-                        </CardTitle>
-                        {getStatusBadge(campaign.status)}
-                      </div>
-                      <CardDescription className="line-clamp-2">
-                        {campaign.description || 'Sem descricao'}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-1 text-muted-foreground">
-                          <Users className="w-4 h-4" />
-                          <span>
-                            {campaign.campaign_members?.[0]?.count || 0} jogadores
-                          </span>
-                        </div>
-                        <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
-                          {campaign.invite_code}
-                        </code>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
+                <CampaignCard
+                  key={campaign.id}
+                  campaign={campaign}
+                  isMaster
+                  href={`/campanhas/${campaign.id}/mestre`}
+                />
               ))}
             </div>
           ) : (
@@ -174,33 +158,11 @@ export default async function CampanhasPage() {
           {participatingCampaigns.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {participatingCampaigns.map((membership: MembershipWithCampaign) => (
-                <Link 
-                  key={membership.id} 
+                <CampaignCard
+                  key={membership.id}
+                  campaign={membership.campaigns}
                   href={`/campanhas/${membership.campaign_id}/jogador`}
-                >
-                  <Card className="section-card h-full hover:border-primary/50 transition-colors cursor-pointer">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <CardTitle className="text-lg line-clamp-1">
-                          {membership.campaigns.name}
-                        </CardTitle>
-                        {getStatusBadge(membership.campaigns.status)}
-                      </div>
-                      <CardDescription className="line-clamp-2">
-                        {membership.campaigns.description || 'Sem descricao'}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-sm text-muted-foreground">
-                        {membership.character_name ? (
-                          <span>Personagem: <strong>{membership.character_name}</strong></span>
-                        ) : (
-                          <span className="italic">Personagem nao definido</span>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
+                />
               ))}
             </div>
           ) : (

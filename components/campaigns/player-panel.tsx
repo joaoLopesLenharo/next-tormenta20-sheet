@@ -34,9 +34,12 @@ import {
   Edit2,
   Check,
   X,
+  History,
 } from 'lucide-react'
 import { DiceRollCard } from '@/components/dice/dice-roll-card'
 import { DiceAnimation } from '@/components/dice/dice-animation'
+import { RollResultDisplay } from '@/components/dice/roll-result-display'
+import { ToastContainer } from '@/components/ui/toast-notification'
 import { rollDice, isValidDiceFormula, createD20Formula } from '@/lib/dice-engine'
 import { TORMENTA_SKILLS, RESISTANCE_TYPES } from '@/lib/types/database'
 import type { Campaign, CampaignMember, Session, DiceRoll, RollType } from '@/lib/types/database'
@@ -63,6 +66,13 @@ export function PlayerPanel({
   const [rolling, setRolling] = useState(false)
   const [showAnimation, setShowAnimation] = useState(false)
   const [lastResult, setLastResult] = useState<DiceRoll | null>(null)
+  const [showResult, setShowResult] = useState(false)
+  const [toasts, setToasts] = useState<Array<{
+    id: string
+    message: string
+    type: 'success' | 'error' | 'info'
+    duration?: number
+  }>>([])
   const router = useRouter()
 
   // Formulario de Pericia
@@ -85,18 +95,32 @@ export function PlayerPanel({
   // Observacao geral
   const [observation, setObservation] = useState('')
 
+  const addToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    const id = Math.random().toString(36).substr(2, 9)
+    setToasts((prev) => [...prev, { id, message, type, duration: 4000 }])
+  }
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }
+
   const saveCharacterName = async () => {
     setSavingName(true)
     const supabase = createClient()
     
-    await supabase
+    const { error } = await supabase
       .from('campaign_members')
       .update({ character_name: characterName.trim() || null })
       .eq('id', membership.id)
 
     setSavingName(false)
-    setEditingName(false)
-    router.refresh()
+    if (!error) {
+      setEditingName(false)
+      addToast('Nome do personagem salvo!', 'success')
+      router.refresh()
+    } else {
+      addToast('Erro ao salvar nome do personagem', 'error')
+    }
   }
 
   const performRoll = async (
@@ -147,7 +171,19 @@ export function PlayerPanel({
     if (!error && newRoll) {
       setRolls((prev) => [newRoll, ...prev].slice(0, 50))
       setLastResult(newRoll)
+      setShowResult(true)
       setObservation('')
+      
+      // Toast de sucesso
+      if (newRoll.is_critical) {
+        addToast('Acerto Crítico! 🎉', 'success')
+      } else if (newRoll.is_fumble) {
+        addToast('Falha Crítica... 😱', 'error')
+      } else {
+        addToast(`Rolagem enviada ao Mestre! (${newRoll.total})`, 'success')
+      }
+    } else {
+      addToast('Erro ao enviar rolagem', 'error')
     }
 
     setShowAnimation(false)
@@ -248,14 +284,22 @@ export function PlayerPanel({
               </div>
             </div>
 
-            {activeSession ? (
-              <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
-                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse mr-2" />
-                Sessao Ativa
-              </Badge>
-            ) : (
-              <Badge variant="secondary">Sem sessao ativa</Badge>
-            )}
+            <div className="flex items-center gap-2">
+              <Link href={`/campanhas/${campaign.id}/historico`}>
+                <Button variant="ghost" size="sm">
+                  <History className="w-4 h-4 mr-2" />
+                  Histórico
+                </Button>
+              </Link>
+              {activeSession ? (
+                <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse mr-2" />
+                  Sessao Ativa
+                </Badge>
+              ) : (
+                <Badge variant="secondary">Sem sessao ativa</Badge>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -593,6 +637,20 @@ export function PlayerPanel({
           </div>
         )}
       </main>
+
+      {/* Animacao de Rolagem */}
+      {showAnimation && <DiceAnimation />}
+
+      {/* Exibicao do Resultado */}
+      {showResult && lastResult && (
+        <RollResultDisplay
+          roll={lastResult}
+          onDismiss={() => setShowResult(false)}
+        />
+      )}
+
+      {/* Container de Toasts */}
+      <ToastContainer toasts={toasts} onRemoveToast={removeToast} />
     </div>
   )
 }
