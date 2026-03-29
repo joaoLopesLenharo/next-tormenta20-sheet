@@ -129,7 +129,7 @@ export function JoinCampaignDialog({ children, userId, onSuccess }: JoinCampaign
                 value={inviteCode}
                 onChange={(e) => {
                   const v = e.target.value
-                    .toUpperCase()
+                    .toLowerCase()
                     .replace(/[^0-9A-F]/g, '')
                     .slice(0, 8)
                   setInviteCode(v)
