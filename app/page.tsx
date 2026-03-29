@@ -36,11 +36,32 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
 import { DiceRoller } from "@/components/dice-roller"
+// Melhoria 2: Imports para rolagem de dados na ficha
+import { 
+  rollDice, 
+  rollDamageWithBonus, 
+  rollCriticalDamageWithMultiplier, 
+  extractCriticalMultiplier,
+  createD20Formula,
+  type DiceResult,
+  type FormattedRollResult
+} from "@/lib/dice-engine"
+import { ToastContainer, type ToastType } from "@/components/ui/toast-notification"
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler"
 import Link from "next/link"
 import { Users } from "lucide-react"
 
 // TypeScript interfaces
+
+// Melhoria 4: Interface para ofícios personalizados
+interface OficioPersonalizado {
+  id: string
+  nome: string // Ex: "Ferreiro", "Alquimista"
+  atributo: string // Atributo base (padrão: inteligencia)
+  treinada: boolean
+  outros: number // Modificador adicional
+}
+
 interface CharacterType {
   nome: string
   nivel: number
@@ -84,6 +105,8 @@ interface CharacterType {
   } & Record<string, any>
   habilidades: any[]
   poderes: any[]
+  // Melhoria 4: Campo para ofícios personalizados (opcional para retrocompatibilidade)
+  oficiosPersonalizados?: OficioPersonalizado[]
 }
 
 interface Sheet {
@@ -163,6 +186,15 @@ export default function CharacterSheet() {
     attribute: "all",
     training: "all", // "all" | "trained" | "untrained"
   })
+
+  // Melhoria 2: Estado para rolagens na ficha e log local de resultados
+  const [rollToasts, setRollToasts] = useState<Array<{
+    id: string
+    message: string
+    type: ToastType
+    duration?: number
+  }>>([])
+  const [rollLog, setRollLog] = useState<FormattedRollResult[]>([])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -252,6 +284,8 @@ export default function CharacterSheet() {
     },
     habilidades: [],
     poderes: [],
+    // Melhoria 4: Lista vazia de ofícios personalizados por padrão
+    oficiosPersonalizados: [],
   })
 
   const generateId = () => "t20_" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4)
@@ -448,6 +482,148 @@ export default function CharacterSheet() {
   const showAlert = (type: string, message: string) => {
     setAlert({ show: true, type, message })
     setTimeout(() => setAlert({ show: false, type: "", message: "" }), 5000)
+  }
+
+  // Melhoria 2: Funções para adicionar/remover toasts de rolagem
+  const addRollToast = (message: string, type: ToastType = 'info') => {
+    const id = Math.random().toString(36).substr(2, 9)
+    setRollToasts((prev) => [...prev, { id, message, type, duration: 5000 }])
+  }
+
+  const removeRollToast = (id: string) => {
+    setRollToasts((prev) => prev.filter((t) => t.id !== id))
+  }
+
+  // Melhoria 2: Função para rolar perícia diretamente da ficha
+  const rollSkillFromSheet = (skillName: string, skillTotal: number) => {
+    const formula = createD20Formula(skillTotal)
+    const result = rollDice(formula)
+    
+    if (!result) {
+      addRollToast('Erro ao rolar dados', 'error')
+      return
+    }
+
+    const formattedResult: FormattedRollResult = {
+      name: skillName,
+      type: 'pericia',
+      formula: formula,
+      individualResults: result.individualResults,
+      modifier: skillTotal,
+      total: result.total,
+      isCritical: result.isCritical,
+      isFumble: result.isFumble,
+      naturalRoll: result.naturalRoll,
+      timestamp: new Date()
+    }
+
+    // Adiciona ao log local
+    setRollLog((prev) => [formattedResult, ...prev].slice(0, 50))
+
+    // Exibe toast com resultado
+    const resultText = `${skillName}: [${result.individualResults.join(', ')}] ${skillTotal >= 0 ? '+' : ''}${skillTotal} = ${result.total}`
+    
+    if (result.isCritical) {
+      addRollToast(`CRITICO! ${resultText}`, 'success')
+    } else if (result.isFumble) {
+      addRollToast(`FALHA CRITICA! ${resultText}`, 'error')
+    } else {
+      addRollToast(resultText, 'info')
+    }
+  }
+
+  // Melhoria 2: Função para rolar ataque de arma
+  const rollWeaponAttack = (weaponName: string, attackBonus: number) => {
+    const formula = createD20Formula(attackBonus)
+    const result = rollDice(formula)
+    
+    if (!result) {
+      addRollToast('Erro ao rolar ataque', 'error')
+      return
+    }
+
+    const formattedResult: FormattedRollResult = {
+      name: `${weaponName} (Ataque)`,
+      type: 'ataque',
+      formula: formula,
+      individualResults: result.individualResults,
+      modifier: attackBonus,
+      total: result.total,
+      isCritical: result.isCritical,
+      isFumble: result.isFumble,
+      naturalRoll: result.naturalRoll,
+      timestamp: new Date()
+    }
+
+    setRollLog((prev) => [formattedResult, ...prev].slice(0, 50))
+
+    const resultText = `${weaponName} (Ataque): [${result.individualResults.join(', ')}] ${attackBonus >= 0 ? '+' : ''}${attackBonus} = ${result.total}`
+    
+    if (result.isCritical) {
+      addRollToast(`CRITICO! ${resultText}`, 'success')
+    } else if (result.isFumble) {
+      addRollToast(`FALHA CRITICA! ${resultText}`, 'error')
+    } else {
+      addRollToast(resultText, 'info')
+    }
+  }
+
+  // Melhoria 2: Função para rolar dano normal de arma
+  const rollWeaponDamage = (weaponName: string, damageFormula: string, damageBonus: number) => {
+    const result = rollDamageWithBonus(damageFormula, damageBonus)
+    
+    if (!result) {
+      addRollToast('Formula de dano invalida', 'error')
+      return
+    }
+
+    const formattedResult: FormattedRollResult = {
+      name: `${weaponName} (Dano)`,
+      type: 'dano',
+      formula: result.formula,
+      individualResults: result.individualResults,
+      modifier: damageBonus,
+      total: result.total,
+      isCritical: false,
+      isFumble: false,
+      naturalRoll: null,
+      timestamp: new Date()
+    }
+
+    setRollLog((prev) => [formattedResult, ...prev].slice(0, 50))
+
+    const resultText = `${weaponName} (Dano): [${result.individualResults.join(', ')}] ${damageBonus >= 0 ? '+' : ''}${damageBonus} = ${result.total}`
+    addRollToast(resultText, 'info')
+  }
+
+  // Melhoria 2: Função para rolar dano crítico de arma
+  const rollWeaponCriticalDamage = (weaponName: string, damageFormula: string, damageBonus: number, criticalString: string) => {
+    const multiplier = extractCriticalMultiplier(criticalString)
+    const result = rollCriticalDamageWithMultiplier(damageFormula, damageBonus, multiplier)
+    
+    if (!result) {
+      addRollToast('Formula de dano invalida', 'error')
+      return
+    }
+
+    const formattedResult: FormattedRollResult = {
+      name: `${weaponName} (CRITICO x${multiplier})`,
+      type: 'dano_critico',
+      formula: result.formula,
+      individualResults: result.individualResults,
+      modifier: damageBonus,
+      total: result.total,
+      isCritical: true,
+      isFumble: false,
+      naturalRoll: null,
+      multiplier: multiplier,
+      timestamp: new Date()
+    }
+
+    setRollLog((prev) => [formattedResult, ...prev].slice(0, 50))
+
+    const resultText = `${weaponName} (CRITICO x${multiplier}): [${result.individualResults.join(', ')}] +${damageBonus} = ${result.total}`
+    addRollToast(resultText, 'success')
   }
 
   const toggleSection = (sectionId: string) => {
@@ -888,11 +1064,36 @@ export default function CharacterSheet() {
     // Armor penalty (if applicable)
     const armorPenalty = skillData.armorPenalty ? getArmorPenalty() : 0
 
-    // Total = Half Level + Attribute Modifier + Training Bonus + Other Bonuses - Armor Penalty
+  // Total = Half Level + Attribute Modifier + Training Bonus + Other Bonuses - Armor Penalty
     // Always return the total, even for trained-only skills
     return halfLevel + attrMod + trainingBonus + others + bonusExtra - armorPenalty
   }
 
+  // Melhoria 4: Função para calcular o total de um ofício personalizado
+  const calculateOficioTotal = (oficio: OficioPersonalizado) => {
+    if (!character) return 0
+    
+    const attrMod = getAttributeModifier(oficio.atributo.toLowerCase() as keyof CharacterType["atributos"])
+    const halfLevel = Math.floor(getTotalLevel() / 2)
+    
+    // Bônus de treino (ofícios são sempre trainedOnly)
+    let trainingBonus = 0
+    if (oficio.treinada) {
+      const level = getTotalLevel()
+      if (level >= 15) {
+        trainingBonus = 6
+      } else if (level >= 7) {
+        trainingBonus = 4
+      } else {
+        trainingBonus = 2
+      }
+    }
+    
+    const outros = oficio.outros || 0
+    
+    return halfLevel + attrMod + trainingBonus + outros
+  }
+  
   if (!character) {
     return (
       <div className="character-sheet flex items-center justify-center min-h-screen">
@@ -2040,8 +2241,20 @@ export default function CharacterSheet() {
 
                                   {/* Total value - prominent display */}
                                   <div className="flex flex-col items-center gap-1">
-                                    <div className="w-20 h-12 bg-primary text-primary-foreground rounded-lg flex items-center justify-center font-bold text-2xl shadow-md">
-                                      {total >= 0 ? `+${total}` : total}
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-20 h-12 bg-primary text-primary-foreground rounded-lg flex items-center justify-center font-bold text-2xl shadow-md">
+                                        {total >= 0 ? `+${total}` : total}
+                                      </div>
+                                      {/* Melhoria 2: Botão de rolagem de perícia */}
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-12 w-12 p-0 bg-accent/20 hover:bg-accent/40 border-accent"
+                                        onClick={() => rollSkillFromSheet(skillData.name, total)}
+                                        title={`Rolar ${skillData.name} (1d20${total >= 0 ? '+' : ''}${total})`}
+                                      >
+                                        <Dice6 className="w-5 h-5" />
+                                      </Button>
                                     </div>
                                     {skillData.trainedOnly && !isTrained && (
                                       <span className="text-xs bg-red-500/20 text-red-700 dark:text-red-300 px-2 py-0.5 rounded-full font-medium whitespace-nowrap">
@@ -2107,6 +2320,186 @@ export default function CharacterSheet() {
                             </Card>
                           )
                         })
+                      )}
+                    </div>
+
+                    {/* Melhoria 4: Seção de Ofícios Personalizados */}
+                    <div className="mt-8 pt-6 border-t">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h3 className="text-lg font-semibold flex items-center gap-2">
+                            <Settings className="w-5 h-5" />
+                            Oficios Personalizados
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            Adicione oficios como Ferreiro, Alquimista, etc.
+                          </p>
+                        </div>
+                        <Button
+                          onClick={() => {
+                            const newOficio: OficioPersonalizado = {
+                              id: generateId(),
+                              nome: "Novo Oficio",
+                              atributo: "inteligencia",
+                              treinada: true,
+                              outros: 0,
+                            }
+                            updateCharacter({
+                              oficiosPersonalizados: [...(character.oficiosPersonalizados || []), newOficio],
+                            })
+                          }}
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Adicionar Oficio
+                        </Button>
+                      </div>
+
+                      {(!character.oficiosPersonalizados || character.oficiosPersonalizados.length === 0) ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Settings className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                          <p>Nenhum oficio personalizado adicionado.</p>
+                          <p className="text-sm">Clique em &quot;Adicionar Oficio&quot; para criar um.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {character.oficiosPersonalizados.map((oficio, index) => {
+                            const total = calculateOficioTotal(oficio)
+                            const halfLevel = Math.floor(getTotalLevel() / 2)
+                            const attrMod = getAttributeModifier(oficio.atributo.toLowerCase() as keyof CharacterType["atributos"])
+                            
+                            let trainingBonus = 0
+                            if (oficio.treinada) {
+                              const level = getTotalLevel()
+                              if (level >= 15) trainingBonus = 6
+                              else if (level >= 7) trainingBonus = 4
+                              else trainingBonus = 2
+                            }
+
+                            return (
+                              <Card key={oficio.id} className="p-4 hover:bg-accent/5 transition-colors">
+                                <div className="flex flex-col gap-3">
+                                  {/* Nome e badges */}
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3 flex-1">
+                                      <Checkbox
+                                        checked={oficio.treinada}
+                                        onCheckedChange={(checked) => {
+                                          const newOficios = [...(character.oficiosPersonalizados || [])]
+                                          newOficios[index] = { ...oficio, treinada: checked === true }
+                                          updateCharacter({ oficiosPersonalizados: newOficios })
+                                        }}
+                                      />
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                          <Input
+                                            value={oficio.nome}
+                                            onChange={(e) => {
+                                              const newOficios = [...(character.oficiosPersonalizados || [])]
+                                              newOficios[index] = { ...oficio, nome: e.target.value }
+                                              updateCharacter({ oficiosPersonalizados: newOficios })
+                                            }}
+                                            className="font-semibold text-base h-8 max-w-xs"
+                                            placeholder="Nome do Oficio"
+                                          />
+                                          <span className="text-xs bg-purple-500/20 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full font-medium">
+                                            Treinada
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-1">
+                                          <span className="text-xs text-muted-foreground">Atributo:</span>
+                                          <Select
+                                            value={oficio.atributo}
+                                            onValueChange={(value) => {
+                                              const newOficios = [...(character.oficiosPersonalizados || [])]
+                                              newOficios[index] = { ...oficio, atributo: value }
+                                              updateCharacter({ oficiosPersonalizados: newOficios })
+                                            }}
+                                          >
+                                            <SelectTrigger className="w-24 h-7 text-xs">
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="forca">FOR</SelectItem>
+                                              <SelectItem value="destreza">DES</SelectItem>
+                                              <SelectItem value="constituicao">CON</SelectItem>
+                                              <SelectItem value="inteligencia">INT</SelectItem>
+                                              <SelectItem value="sabedoria">SAB</SelectItem>
+                                              <SelectItem value="carisma">CAR</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Total e botão de rolagem */}
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-20 h-12 bg-primary text-primary-foreground rounded-lg flex items-center justify-center font-bold text-2xl shadow-md">
+                                        {total >= 0 ? `+${total}` : total}
+                                      </div>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-12 w-12 p-0 bg-accent/20 hover:bg-accent/40 border-accent"
+                                        onClick={() => rollSkillFromSheet(`Oficio: ${oficio.nome}`, total)}
+                                        title={`Rolar Oficio: ${oficio.nome} (1d20${total >= 0 ? '+' : ''}${total})`}
+                                      >
+                                        <Dice6 className="w-5 h-5" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-12 w-12 p-0 hover:bg-destructive/10 hover:text-destructive"
+                                        onClick={() => {
+                                          const newOficios = character.oficiosPersonalizados?.filter((_, i) => i !== index) || []
+                                          updateCharacter({ oficiosPersonalizados: newOficios })
+                                        }}
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </Button>
+                                    </div>
+                                  </div>
+
+                                  {/* Breakdown do cálculo */}
+                                  <div className="flex items-center gap-2 text-sm font-mono bg-muted/50 p-3 rounded-md flex-wrap">
+                                    <span className="text-muted-foreground">1/2 Nivel:</span>
+                                    <span className="font-semibold min-w-[2rem] text-center">{halfLevel}</span>
+
+                                    <span className="text-muted-foreground">+</span>
+                                    <span className="text-muted-foreground">{oficio.atributo.toUpperCase()}:</span>
+                                    <span className="font-semibold min-w-[2rem] text-center">
+                                      {attrMod >= 0 ? `+${attrMod}` : attrMod}
+                                    </span>
+
+                                    {oficio.treinada && (
+                                      <>
+                                        <span className="text-muted-foreground">+</span>
+                                        <span className="text-muted-foreground">Treino:</span>
+                                        <span className="font-semibold min-w-[2rem] text-center text-green-600 dark:text-green-400">
+                                          +{trainingBonus}
+                                        </span>
+                                      </>
+                                    )}
+
+                                    <span className="text-muted-foreground">+</span>
+                                    <span className="text-muted-foreground">Outros:</span>
+                                    <Input
+                                      type="number"
+                                      className="w-20 h-8 text-center text-sm"
+                                      placeholder="0"
+                                      value={oficio.outros || ""}
+                                      onChange={(e) => {
+                                        const value = e.target.value === "" ? 0 : Number.parseInt(e.target.value) || 0
+                                        const newOficios = [...(character.oficiosPersonalizados || [])]
+                                        newOficios[index] = { ...oficio, outros: value }
+                                        updateCharacter({ oficiosPersonalizados: newOficios })
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              </Card>
+                            )
+                          })}
+                        </div>
                       )}
                     </div>
                   </CollapsibleContent>
@@ -3025,6 +3418,41 @@ export default function CharacterSheet() {
                                     />
                                   </div>
                                 </div>
+                                
+                                {/* Melhoria 2: Botões de rolagem de arma */}
+                                <div className="flex items-center gap-2 border-l pl-4 ml-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-9 px-3 bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/50 text-blue-700 dark:text-blue-300"
+                                    onClick={() => rollWeaponAttack(weapon.nome || 'Arma', weapon.bonus_ataque || 0)}
+                                    title="Rolar Ataque"
+                                  >
+                                    <Dice6 className="w-4 h-4 mr-1" />
+                                    Ataque
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-9 px-3 bg-green-500/10 hover:bg-green-500/20 border-green-500/50 text-green-700 dark:text-green-300"
+                                    onClick={() => rollWeaponDamage(weapon.nome || 'Arma', weapon.dano || '1d6', weapon.bonus_dano || 0)}
+                                    title="Rolar Dano"
+                                  >
+                                    <Dice6 className="w-4 h-4 mr-1" />
+                                    Dano
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-9 px-3 bg-red-500/20 hover:bg-red-500/30 border-red-500/50 text-red-700 dark:text-red-300 font-semibold"
+                                    onClick={() => rollWeaponCriticalDamage(weapon.nome || 'Arma', weapon.dano || '1d6', weapon.bonus_dano || 0, weapon.critico || '20/x2')}
+                                    title={`Rolar Dano Crítico (${weapon.critico || '20/x2'})`}
+                                  >
+                                    <Dice6 className="w-4 h-4 mr-1" />
+                                    Crítico
+                                  </Button>
+                                </div>
+                                
                                 <Button
                                   variant="destructive"
                                   onClick={() => {
@@ -3710,6 +4138,48 @@ export default function CharacterSheet() {
 
       {/* Dice Roller Component */}
       <DiceRoller character={character} />
+
+      {/* Melhoria 2: Container de toasts para resultados de rolagem */}
+      <ToastContainer toasts={rollToasts} onRemoveToast={removeRollToast} />
+
+      {/* Melhoria 2: Painel flutuante de log de rolagens */}
+      {rollLog.length > 0 && (
+        <div className="fixed bottom-6 left-6 z-50 w-80 max-h-64 overflow-y-auto bg-card border border-border rounded-lg shadow-lg p-3">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-semibold flex items-center gap-2">
+              <Dice6 className="w-4 h-4" />
+              Historico de Rolagens
+            </h4>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-6 w-6 p-0"
+              onClick={() => setRollLog([])}
+            >
+              <X className="w-3 h-3" />
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {rollLog.slice(0, 10).map((roll, idx) => (
+              <div 
+                key={`roll-${idx}-${roll.timestamp.getTime()}`}
+                className={cn(
+                  "p-2 rounded text-xs border",
+                  roll.isCritical && "bg-green-500/10 border-green-500/30",
+                  roll.isFumble && "bg-red-500/10 border-red-500/30",
+                  !roll.isCritical && !roll.isFumble && "bg-muted/50 border-border"
+                )}
+              >
+                <div className="font-medium">{roll.name}</div>
+                <div className="text-muted-foreground">
+                  [{roll.individualResults.join(', ')}] {roll.modifier >= 0 ? '+' : ''}{roll.modifier} = <span className="font-bold text-foreground">{roll.total}</span>
+                  {roll.multiplier && <span className="ml-1 text-red-500">(x{roll.multiplier})</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

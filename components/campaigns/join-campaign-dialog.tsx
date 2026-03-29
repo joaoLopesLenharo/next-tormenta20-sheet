@@ -16,7 +16,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Loader2 } from 'lucide-react'
-import { normalizeInviteCodeForLookup } from '@/lib/invite-code'
+import { normalizeInviteCodeForLookup, normalizeInviteCodeInput } from '@/lib/invite-code'
 
 interface JoinCampaignDialogProps {
   children: ReactNode
@@ -123,18 +123,17 @@ export function JoinCampaignDialog({ children, userId, onSuccess }: JoinCampaign
               <Label htmlFor="inviteCode" className="form-label">
                 Codigo de Convite *
               </Label>
+              {/* Melhoria 1: Campo de código convertido para minúsculo em tempo real */}
               <Input
                 id="inviteCode"
-                placeholder="Ex: A1B2C3D4"
+                placeholder="Ex: a1b2c3d4"
                 value={inviteCode}
                 onChange={(e) => {
-                  const v = e.target.value
-                    .toLowerCase()
-                    .replace(/[^0-9A-F]/g, '')
-                    .slice(0, 8)
+                  // Converte para minúsculo e remove caracteres inválidos em tempo real
+                  const v = normalizeInviteCodeInput(e.target.value)
                   setInviteCode(v)
                 }}
-                className="form-input font-mono"
+                className="form-input font-mono lowercase"
                 maxLength={8}
                 required
               />
