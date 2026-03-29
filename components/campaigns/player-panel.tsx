@@ -43,6 +43,9 @@ import { ToastContainer } from '@/components/ui/toast-notification'
 import { rollDice, isValidDiceFormula, createD20Formula } from '@/lib/dice-engine'
 import { TORMENTA_SKILLS, RESISTANCE_TYPES } from '@/lib/types/database'
 import type { Campaign, CampaignMember, Session, DiceRoll, RollType } from '@/lib/types/database'
+// Melhoria 3: Import do componente de importação de ficha
+import { ImportSheetDialog } from '@/components/campaigns/import-sheet-dialog'
+import { Upload } from 'lucide-react'
 
 interface PlayerPanelProps {
   campaign: Campaign
@@ -62,6 +65,9 @@ export function PlayerPanel({
   const [rolls, setRolls] = useState<DiceRoll[]>(initialRolls as DiceRoll[])
   const [characterName, setCharacterName] = useState(membership.character_name || '')
   const [editingName, setEditingName] = useState(false)
+  
+  // Melhoria 3: Estado para ficha carregada/importada
+  const [loadedCharacter, setLoadedCharacter] = useState<any>(null)
   const [savingName, setSavingName] = useState(false)
   const [rolling, setRolling] = useState(false)
   const [showAnimation, setShowAnimation] = useState(false)
@@ -104,6 +110,16 @@ export function PlayerPanel({
     setToasts((prev) => prev.filter((t) => t.id !== id))
   }
 
+  // Melhoria 3: Handler para importação de ficha
+  const handleImportSheet = (character: any, sheetName: string) => {
+    setLoadedCharacter(character)
+    // Atualiza o nome do personagem se ainda não foi definido
+    if (!characterName && sheetName) {
+      setCharacterName(sheetName)
+    }
+    addToast(`Ficha "${sheetName}" carregada com sucesso!`, 'success')
+  }
+  
   const saveCharacterName = async () => {
     setSavingName(true)
     const supabase = createClient()
@@ -285,6 +301,14 @@ export function PlayerPanel({
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Melhoria 3: Botão para importar ficha */}
+              <ImportSheetDialog onImport={handleImportSheet}>
+                <Button variant="outline" size="sm">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Importar Ficha
+                </Button>
+              </ImportSheetDialog>
+              
               <Link href={`/campanhas/${campaign.id}/historico`}>
                 <Button variant="ghost" size="sm">
                   <History className="w-4 h-4 mr-2" />

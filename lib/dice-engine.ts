@@ -142,3 +142,120 @@ export function createD20Formula(modifier: number): string {
   if (modifier === 0) return '1d20'
   return modifier > 0 ? `1d20+${modifier}` : `1d20${modifier}`
 }
+
+/**
+ * Melhoria 2: Funções auxiliares para rolagem na ficha do personagem
+ */
+
+/**
+ * Extrai o multiplicador de crítico de uma string no formato "19/x2" ou "20/x3"
+ * Retorna 2 como padrão se não encontrar
+ */
+export function extractCriticalMultiplier(criticalString: string | undefined): number {
+  if (!criticalString) return 2
+  const match = criticalString.match(/x(\d+)/i)
+  return match ? parseInt(match[1], 10) : 2
+}
+
+/**
+ * Parseia uma fórmula de dano e retorna os componentes
+ * Ex: "1d6+3" -> { count: 1, sides: 6, modifier: 3 }
+ */
+export function parseDamageFormula(formula: string): { count: number; sides: number; modifier: number } | null {
+  const parsed = parseDiceFormula(formula)
+  if (!parsed) {
+    // Tentar parsear fórmulas mais simples como "2d6" sem modificador
+    const simpleMatch = formula.toLowerCase().match(/^(\d*)d(\d+)$/)
+    if (simpleMatch) {
+      return {
+        count: simpleMatch[1] ? parseInt(simpleMatch[1], 10) : 1,
+        sides: parseInt(simpleMatch[2], 10),
+        modifier: 0
+      }
+    }
+    return null
+  }
+  return parsed
+}
+
+/**
+ * Rola dano crítico baseado no multiplicador
+ * Ex: dano "1d8", multiplicador 3 -> rola 3d8 + bônus de dano uma vez
+ */
+export function rollCriticalDamageWithMultiplier(
+  damageFormula: string,
+  damageBonus: number,
+  multiplier: number
+): DiceResult | null {
+  const parsed = parseDamageFormula(damageFormula)
+  if (!parsed) return null
+
+  // Rola o dado o número de vezes do multiplicador
+  const criticalCount = parsed.count * multiplier
+  const individualResults: number[] = []
+  
+  for (let i = 0; i < criticalCount; i++) {
+    individualResults.push(rollDie(parsed.sides))
+  }
+  
+  const diceSum = individualResults.reduce((sum, val) => sum + val, 0)
+  // Bônus de dano é adicionado apenas uma vez no crítico
+  const total = diceSum + damageBonus
+  
+  const formula = `${criticalCount}d${parsed.sides}${damageBonus >= 0 ? '+' : ''}${damageBonus}`
+  
+  return {
+    formula,
+    individualResults,
+    modifier: damageBonus,
+    total,
+    naturalRoll: null,
+    isCritical: true,
+    isFumble: false,
+  }
+}
+
+/**
+ * Rola dados de dano normal com bônus
+ */
+export function rollDamageWithBonus(damageFormula: string, damageBonus: number): DiceResult | null {
+  const parsed = parseDamageFormula(damageFormula)
+  if (!parsed) return null
+
+  const individualResults: number[] = []
+  for (let i = 0; i < parsed.count; i++) {
+    individualResults.push(rollDie(parsed.sides))
+  }
+  
+  const diceSum = individualResults.reduce((sum, val) => sum + val, 0)
+  const total = diceSum + damageBonus
+  
+  const formula = `${parsed.count}d${parsed.sides}${damageBonus >= 0 ? '+' : ''}${damageBonus}`
+  
+  return {
+    formula,
+    individualResults,
+    modifier: damageBonus,
+    total,
+    naturalRoll: null,
+    isCritical: false,
+    isFumble: false,
+  }
+}
+
+/**
+ * Interface para resultado de rolagem formatado para exibição
+ */
+export interface FormattedRollResult {
+  name: string
+  type: 'pericia' | 'ataque' | 'dano' | 'dano_critico'
+  formula: string
+  individualResults: number[]
+  modifier: number
+  total: number
+  isCritical: boolean
+  isFumble: boolean
+  naturalRoll: number | null
+  multiplier?: number // Para crítico
+  timestamp: Date
+}
