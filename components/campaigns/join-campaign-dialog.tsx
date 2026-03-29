@@ -16,6 +16,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Loader2 } from 'lucide-react'
+import { normalizeInviteCodeForLookup } from '@/lib/invite-code'
 
 interface JoinCampaignDialogProps {
   children: ReactNode
@@ -48,7 +49,7 @@ export function JoinCampaignDialog({ children, userId, onSuccess }: JoinCampaign
     const { data: campaign, error: findError } = await supabase
       .from('campaigns')
       .select('id, master_id, status')
-      .eq('invite_code', inviteCode.trim().toLowerCase())
+      .eq('invite_code', normalizeInviteCodeForLookup(inviteCode))
       .single()
 
     if (findError || !campaign) {
@@ -124,9 +125,15 @@ export function JoinCampaignDialog({ children, userId, onSuccess }: JoinCampaign
               </Label>
               <Input
                 id="inviteCode"
-                placeholder="Ex: a1b2c3d4"
+                placeholder="Ex: A1B2C3D4"
                 value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value
+                    .toUpperCase()
+                    .replace(/[^0-9A-F]/g, '')
+                    .slice(0, 8)
+                  setInviteCode(v)
+                }}
                 className="form-input font-mono uppercase"
                 maxLength={8}
                 required

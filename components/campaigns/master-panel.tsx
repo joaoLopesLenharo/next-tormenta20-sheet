@@ -43,6 +43,7 @@ import { DiceRollCard } from '@/components/dice/dice-roll-card'
 import { MasterDiceRoller } from '@/components/dice/master-dice-roller'
 import { ManageMembersDialog } from '@/components/campaigns/manage-members-dialog'
 import type { Campaign, Session, DiceRoll, CampaignMember, Profile } from '@/lib/types/database'
+import { formatInviteCodeDisplay } from '@/lib/invite-code'
 
 interface MemberWithProfile extends CampaignMember {
   profiles: Profile
@@ -114,8 +115,10 @@ export function MasterPanel({
     }
   }, [activeSession])
 
+  const inviteCodeDisplay = formatInviteCodeDisplay(campaign.invite_code)
+
   const copyInviteCode = async () => {
-    await navigator.clipboard.writeText(campaign.invite_code)
+    await navigator.clipboard.writeText(inviteCodeDisplay)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -208,7 +211,7 @@ export function MasterPanel({
                 ) : (
                   <Copy className="w-4 h-4 mr-2" />
                 )}
-                <code className="font-mono">{campaign.invite_code}</code>
+                <code className="font-mono">{inviteCodeDisplay}</code>
               </Button>
             </div>
           </div>

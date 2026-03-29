@@ -11,6 +11,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Users, Calendar } from 'lucide-react'
 import type { Campaign } from '@/lib/types/database'
+import { formatInviteCodeDisplay } from '@/lib/invite-code'
 
 interface CampaignCardProps {
   campaign: Campaign & { campaign_members?: { count: number }[] }
@@ -96,7 +97,7 @@ export function CampaignCard({
             <div className="mt-3 pt-3 border-t border-border/50">
               <p className="text-xs text-muted-foreground mb-1">Código de Convite:</p>
               <code className="text-xs font-mono bg-muted/50 px-2 py-1 rounded border border-border/50">
-                {campaign.invite_code}
+                {formatInviteCodeDisplay(campaign.invite_code)}
               </code>
             </div>
           )}
