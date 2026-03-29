@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { getBaseUrl } from '@/lib/get-base-url'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -48,9 +49,7 @@ export default function SignUpPage() {
       email,
       password,
       options: {
-        emailRedirectTo:
-          process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ||
-          `${window.location.origin}/campanhas`,
+        emailRedirectTo: `${getBaseUrl()}/campanhas`,
         data: {
           display_name: displayName || email.split('@')[0],
         },
