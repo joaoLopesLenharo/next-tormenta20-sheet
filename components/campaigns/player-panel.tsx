@@ -1,5 +1,7 @@
 'use client'
 
+import dynamic from 'next/dynamic'
+
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -46,12 +48,23 @@ import type { Campaign, CampaignMember, Session, DiceRoll, RollType } from '@/li
 // Melhoria 3: Import do componente de importação de ficha
 import { ImportSheetDialog } from '@/components/campaigns/import-sheet-dialog'
 import { Upload } from 'lucide-react'
+import { InitiativeTracker } from '@/components/campaigns/initiative-tracker'
+import type { InitiativeEntry, Profile } from '@/lib/types/database'
+
+// Import dinÃ¢mico do CharacterSheet para evitar SSR issues
+const CharacterSheet = dynamic(() => import('@/app/page'), { ssr: false })
+
+interface MemberWithProfile extends CampaignMember {
+  profiles: Profile
+}
 
 interface PlayerPanelProps {
   campaign: Campaign
   membership: CampaignMember
   activeSession: Session | null
   initialRolls: unknown[]
+  initialInitiative: InitiativeEntry[]
+  members: MemberWithProfile[]
   userId: string
 }
 
@@ -60,6 +73,8 @@ export function PlayerPanel({
   membership,
   activeSession,
   initialRolls,
+  initialInitiative,
+  members,
   userId,
 }: PlayerPanelProps) {
   const [rolls, setRolls] = useState<DiceRoll[]>(initialRolls as DiceRoll[])
@@ -80,6 +95,9 @@ export function PlayerPanel({
     duration?: number
   }>>([])
   const router = useRouter()
+
+  // Tab principal (sessao vs ficha)
+  const [mainTab, setMainTab] = useState<'sessao' | 'ficha'>('sessao')
 
   // Formulario de Pericia
   const [selectedSkill, setSelectedSkill] = useState<string>('')
@@ -329,6 +347,21 @@ export function PlayerPanel({
       </header>
 
       <main className="container mx-auto px-4 py-6">
+        {/* Tabs principais: Sessao vs Ficha */}
+        <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as 'sessao' | 'ficha')} className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-6">
+            <TabsTrigger value="sessao" className="text-sm">
+              <Dices className="w-4 h-4 mr-2" />
+              Sessão
+            </TabsTrigger>
+            <TabsTrigger value="ficha" className="text-sm">
+              <Sparkles className="w-4 h-4 mr-2" />
+              Ficha Completa
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Tab Sessão */}
+          <TabsContent value="sessao">
         {!activeSession ? (
           <Card className="section-card">
             <CardContent className="py-12 text-center">
@@ -628,7 +661,19 @@ export function PlayerPanel({
             </div>
 
             {/* Historico */}
-            <div>
+            <div className="space-y-6">
+              {/* Iniciativa */}
+              {activeSession && (
+                <InitiativeTracker
+                  sessionId={activeSession.id}
+                  campaignId={campaign.id}
+                  members={members}
+                  initialEntries={initialInitiative}
+                  isMaster={false}
+                  userId={userId}
+                />
+              )}
+
               <Card className="section-card">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -660,6 +705,15 @@ export function PlayerPanel({
             </div>
           </div>
         )}
+          </TabsContent>
+
+          {/* Tab Ficha Completa */}
+          <TabsContent value="ficha">
+            <div className="-mx-4 sm:mx-0">
+              <CharacterSheet />
+            </div>
+          </TabsContent>
+        </Tabs>
       </main>
 
       {/* Animacao de Rolagem */}

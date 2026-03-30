@@ -88,7 +88,7 @@ export default async function HistoricoPage({ params }: PageProps) {
       </header>
 
       <main className="container mx-auto px-4 py-6">
-        <SessionHistory campaignId={id} isMaster={isMaster} sessions={sessions || []} />
+        <SessionHistory campaignId={id} isMaster={isMaster} sessions={sessions || []} userId={user.id} />
       </main>
     </div>
   )

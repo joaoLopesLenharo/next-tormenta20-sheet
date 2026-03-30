@@ -49,8 +49,15 @@ export default async function PlayerPage({ params }: PlayerPageProps) {
     .eq('is_active', true)
     .single()
 
+  // Buscar membros da campanha (para iniciativa)
+  const { data: members } = await supabase
+    .from('campaign_members')
+    .select('*, profiles(*)')
+    .eq('campaign_id', id)
+
   // Buscar rolagens do jogador na sessao ativa
   let myRolls: unknown[] = []
+  let initiativeEntries: unknown[] = []
   if (activeSession) {
     const { data: rolls } = await supabase
       .from('dice_rolls')
@@ -61,6 +68,15 @@ export default async function PlayerPage({ params }: PlayerPageProps) {
       .limit(50)
     
     myRolls = rolls || []
+
+    // Buscar entradas de iniciativa
+    const { data: initiative } = await supabase
+      .from('initiative_entries')
+      .select('*')
+      .eq('session_id', activeSession.id)
+      .order('sort_order', { ascending: true })
+
+    initiativeEntries = initiative || []
   }
 
   return (
@@ -69,6 +85,8 @@ export default async function PlayerPage({ params }: PlayerPageProps) {
       membership={membership}
       activeSession={activeSession}
       initialRolls={myRolls}
+      initialInitiative={initiativeEntries as any}
+      members={members || []}
       userId={user.id}
     />
   )

@@ -114,3 +114,17 @@ export const RESISTANCE_TYPES: { value: ResistanceType; label: string }[] = [
   { value: 'reflexos', label: 'Reflexos' },
   { value: 'vontade', label: 'Vontade' },
 ]
+
+export interface InitiativeEntry {
+  id: string
+  session_id: string
+  campaign_member_id: string | null
+  character_name: string
+  roll_value: number
+  modifier: number
+  total: number
+  sort_order: number
+  is_current: boolean
+  is_npc: boolean
+  created_at: string
+}

@@ -77,3 +77,20 @@ CREATE TABLE IF NOT EXISTS public.dice_rolls (
 );
 
 ALTER TABLE public.dice_rolls ENABLE ROW LEVEL SECURITY;
+
+-- 6. INITIATIVE ENTRIES TABLE
+CREATE TABLE IF NOT EXISTS public.initiative_entries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES public.sessions(id) ON DELETE CASCADE,
+  campaign_member_id UUID REFERENCES public.campaign_members(id) ON DELETE CASCADE,
+  character_name TEXT NOT NULL,
+  roll_value INTEGER NOT NULL DEFAULT 0,
+  modifier INTEGER NOT NULL DEFAULT 0,
+  total INTEGER NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  is_current BOOLEAN NOT NULL DEFAULT FALSE,
+  is_npc BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.initiative_entries ENABLE ROW LEVEL SECURITY;

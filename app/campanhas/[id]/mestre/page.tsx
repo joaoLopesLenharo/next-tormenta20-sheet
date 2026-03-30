@@ -44,6 +44,7 @@ export default async function MasterPage({ params }: MasterPageProps) {
 
   // Buscar rolagens recentes se houver sessao ativa
   let recentRolls: unknown[] = []
+  let initiativeEntries: unknown[] = []
   if (activeSession) {
     const { data: rolls } = await supabase
       .from('dice_rolls')
@@ -53,6 +54,15 @@ export default async function MasterPage({ params }: MasterPageProps) {
       .limit(100)
     
     recentRolls = rolls || []
+
+    // Buscar entradas de iniciativa
+    const { data: initiative } = await supabase
+      .from('initiative_entries')
+      .select('*')
+      .eq('session_id', activeSession.id)
+      .order('sort_order', { ascending: true })
+
+    initiativeEntries = initiative || []
   }
 
   return (
@@ -61,6 +71,7 @@ export default async function MasterPage({ params }: MasterPageProps) {
       activeSession={activeSession}
       members={members || []}
       initialRolls={recentRolls}
+      initialInitiative={initiativeEntries as any}
       userId={user.id}
     />
   )

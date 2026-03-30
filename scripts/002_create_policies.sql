@@ -127,3 +127,22 @@ ALTER FUNCTION public.find_campaign_by_invite_code(text) OWNER TO postgres;
 
 REVOKE ALL ON FUNCTION public.find_campaign_by_invite_code(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.find_campaign_by_invite_code(text) TO authenticated;
+
+-- INITIATIVE ENTRIES POLICIES
+CREATE POLICY "initiative_master_all" ON public.initiative_entries
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM public.sessions s
+      JOIN public.campaigns c ON c.id = s.campaign_id
+      WHERE s.id = initiative_entries.session_id AND c.master_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "initiative_members_select" ON public.initiative_entries
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.sessions s
+      WHERE s.id = initiative_entries.session_id
+        AND public.campaign_member_exists(auth.uid(), s.campaign_id)
+    )
+  );

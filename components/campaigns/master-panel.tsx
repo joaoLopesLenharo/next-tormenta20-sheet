@@ -42,7 +42,8 @@ import {
 import { DiceRollCard } from '@/components/dice/dice-roll-card'
 import { MasterDiceRoller } from '@/components/dice/master-dice-roller'
 import { ManageMembersDialog } from '@/components/campaigns/manage-members-dialog'
-import type { Campaign, Session, DiceRoll, CampaignMember, Profile } from '@/lib/types/database'
+import { InitiativeTracker } from '@/components/campaigns/initiative-tracker'
+import type { Campaign, Session, DiceRoll, CampaignMember, Profile, InitiativeEntry } from '@/lib/types/database'
 import { formatInviteCodeDisplay } from '@/lib/invite-code'
 
 interface MemberWithProfile extends CampaignMember {
@@ -58,6 +59,7 @@ interface MasterPanelProps {
   activeSession: Session | null
   members: MemberWithProfile[]
   initialRolls: unknown[]
+  initialInitiative: InitiativeEntry[]
   userId: string
 }
 
@@ -66,6 +68,7 @@ export function MasterPanel({
   activeSession: initialSession,
   members,
   initialRolls,
+  initialInitiative,
   userId,
 }: MasterPanelProps) {
   const [activeSession, setActiveSession] = useState<Session | null>(initialSession)
@@ -351,6 +354,18 @@ export function MasterPanel({
               <MasterDiceRoller
                 sessionId={activeSession.id}
                 campaignId={campaign.id}
+                userId={userId}
+              />
+            )}
+
+            {/* Iniciativa */}
+            {activeSession && (
+              <InitiativeTracker
+                sessionId={activeSession.id}
+                campaignId={campaign.id}
+                members={members}
+                initialEntries={initialInitiative}
+                isMaster={true}
                 userId={userId}
               />
             )}

@@ -32,9 +32,10 @@ interface SessionHistoryProps {
   campaignId: string
   isMaster: boolean
   sessions: Session[]
+  userId: string
 }
 
-export function SessionHistory({ campaignId, isMaster, sessions }: SessionHistoryProps) {
+export function SessionHistory({ campaignId, isMaster, sessions, userId }: SessionHistoryProps) {
   const [expandedSession, setExpandedSession] = useState<string | null>(null)
   const [sessionRolls, setSessionRolls] = useState<Record<string, DiceRoll[]>>({})
   const [loading, setLoading] = useState<Record<string, boolean>>({})
@@ -45,11 +46,17 @@ export function SessionHistory({ campaignId, isMaster, sessions }: SessionHistor
     setLoading((prev) => ({ ...prev, [sessionId]: true }))
     const supabase = createClient()
 
-    const { data: rolls } = await supabase
+    let query = supabase
       .from('dice_rolls')
       .select('*')
       .eq('session_id', sessionId)
-      .order('created_at', { ascending: false })
+
+    // Jogador vê apenas suas próprias rolagens
+    if (!isMaster) {
+      query = query.eq('user_id', userId)
+    }
+
+    const { data: rolls } = await query.order('created_at', { ascending: false })
 
     if (rolls) {
       setSessionRolls((prev) => ({ ...prev, [sessionId]: rolls as DiceRoll[] }))
