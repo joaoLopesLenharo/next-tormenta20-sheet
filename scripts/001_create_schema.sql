@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS public.campaign_members (
   campaign_id UUID NOT NULL REFERENCES public.campaigns(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   character_name TEXT,
+  character_data JSONB,
   joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(campaign_id, user_id)
 );

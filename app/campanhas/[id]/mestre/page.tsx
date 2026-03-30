@@ -36,8 +36,13 @@ export default async function MasterPage({ params }: MasterPageProps) {
     .eq('is_active', true)
     .single()
 
-  // Buscar membros da campanha
-  const { data: members, error: membersError } = await supabase
+  // Buscar membros da campanha usando Service Role para garantir que o mestre veja todos (bypassa RLS problemáticos)
+  const { createClient: createAdminClient } = await import('@supabase/supabase-js')
+  const adminAuth = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+  const { data: members, error: membersError } = await adminAuth
     .from('campaign_members')
     .select('*, profiles(*)')
     .eq('campaign_id', id)

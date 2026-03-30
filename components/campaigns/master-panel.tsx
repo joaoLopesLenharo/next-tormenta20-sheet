@@ -43,11 +43,13 @@ import { DiceRollCard } from '@/components/dice/dice-roll-card'
 import { MasterDiceRoller } from '@/components/dice/master-dice-roller'
 import { ManageMembersDialog } from '@/components/campaigns/manage-members-dialog'
 import { InitiativeTracker } from '@/components/campaigns/initiative-tracker'
+import { MasterSheetViewer } from '@/components/campaigns/master-sheet-viewer'
 import type { Campaign, Session, DiceRoll, CampaignMember, Profile, InitiativeEntry } from '@/lib/types/database'
 import { formatInviteCodeDisplay } from '@/lib/invite-code'
 
 interface MemberWithProfile extends CampaignMember {
   profiles: Profile
+  character_data?: any
 }
 
 interface RollWithProfile extends DiceRoll {
@@ -77,6 +79,7 @@ export function MasterPanel({
   const [sessionName, setSessionName] = useState('')
   const [creatingSession, setCreatingSession] = useState(false)
   const [showSecretRolls, setShowSecretRolls] = useState(true)
+  const [selectedMemberSheet, setSelectedMemberSheet] = useState<any>(null)
   const router = useRouter()
 
   // Supabase Realtime para rolagens
@@ -326,18 +329,29 @@ export function MasterPanel({
                     {members.map((member) => (
                       <li
                         key={member.id}
-                        className="flex items-center justify-between p-2 rounded-lg bg-muted/50"
+                        className="flex items-center justify-between p-2 pl-3 rounded-lg bg-muted/50 border border-border/50 hover:bg-muted/70 transition-colors"
                       >
                         <div>
                           <p className="text-sm font-medium">
                             {member.profiles?.display_name || 'Jogador'}
                           </p>
                           {member.character_name && (
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <span className={member.character_data ? "text-green-500/80" : ""}>
+                                {member.character_data ? '✓' : ''} 
+                              </span>
                               {member.character_name}
                             </p>
                           )}
                         </div>
+                        <Button 
+                          variant="secondary" 
+                          size="sm" 
+                          className="text-xs px-2 h-7"
+                          onClick={() => setSelectedMemberSheet(member)}
+                        >
+                          Ver Ficha
+                        </Button>
                       </li>
                     ))}
                   </ul>
@@ -348,6 +362,13 @@ export function MasterPanel({
                 )}
               </CardContent>
             </Card>
+
+            {/* Viewer da Ficha do Jogador */}
+            <MasterSheetViewer 
+              member={selectedMemberSheet}
+              isOpen={!!selectedMemberSheet}
+              onClose={() => setSelectedMemberSheet(null)}
+            />
 
             {/* Rolagem do Mestre */}
             {activeSession && (

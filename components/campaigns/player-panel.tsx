@@ -183,6 +183,20 @@ export function PlayerPanel({
     return halfLevel + attrMod + trainingBonus + outros + bonusExtra
   }
 
+  // Sincronizar a ficha inteira com o Supabase para o Mestre
+  useEffect(() => {
+    if (loadedCharacter && membership?.id) {
+      const syncToSupabase = async () => {
+        const supabase = createClient()
+        await supabase
+          .from('campaign_members')
+          .update({ character_data: loadedCharacter })
+          .eq('id', membership.id)
+      }
+      syncToSupabase()
+    }
+  }, [loadedCharacter, membership?.id])
+
   // Formulario de Pericia
   const [selectedSkill, setSelectedSkill] = useState<string>('')
   const [skillModifier, setSkillModifier] = useState('')
