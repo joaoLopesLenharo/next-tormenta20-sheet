@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -9,7 +10,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Users, Calendar } from 'lucide-react'
+import { Users, Calendar, Trash2 } from 'lucide-react'
 import type { Campaign } from '@/lib/types/database'
 import { formatInviteCodeDisplay } from '@/lib/invite-code'
 
@@ -18,6 +19,7 @@ interface CampaignCardProps {
   isMaster?: boolean
   memberCount?: number
   href: string
+  onDelete?: () => void
 }
 
 export function CampaignCard({
@@ -25,6 +27,7 @@ export function CampaignCard({
   isMaster = false,
   memberCount = 0,
   href,
+  onDelete,
 }: CampaignCardProps) {
   const memberCountValue =
     campaign.campaign_members && campaign.campaign_members.length > 0
@@ -99,6 +102,25 @@ export function CampaignCard({
               <code className="text-xs font-mono bg-muted/50 px-2 py-1 rounded border border-border/50">
                 {formatInviteCodeDisplay(campaign.invite_code)}
               </code>
+            </div>
+          )}
+
+          {/* Botão de apagar */}
+          {isMaster && onDelete && (
+            <div className="mt-3 pt-3 border-t border-border/50">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onDelete()
+                }}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Apagar Campanha
+              </Button>
             </div>
           )}
         </CardContent>

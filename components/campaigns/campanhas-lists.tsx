@@ -16,7 +16,7 @@ interface MembershipWithCampaign extends CampaignMember {
 }
 
 const CAMPAIGN_FIELDS =
-  'id, name, description, status, created_at, updated_at, master_id, invite_code' as const
+  'id, name, description, cover_image_url, status, created_at, updated_at, master_id, invite_code, campaign_members(count)' as const
 
 interface CampanhasListsProps {
   userId: string
@@ -92,6 +92,20 @@ export function CampanhasLists({ userId }: CampanhasListsProps) {
     setLoading(false)
   }, [userId])
 
+  const deleteCampaign = async (campaignId: string) => {
+    if (!confirm('Tem certeza que deseja apagar esta campanha? Esta ação não pode ser desfeita.')) return
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('campaigns')
+      .delete()
+      .eq('id', campaignId)
+      .eq('master_id', userId)
+
+    if (!error) {
+      setMasterCampaigns((prev) => prev.filter((c) => c.id !== campaignId))
+    }
+  }
+
   useEffect(() => {
     setLoading(true)
     void loadCampaigns()
@@ -154,6 +168,7 @@ export function CampanhasLists({ userId }: CampanhasListsProps) {
                 campaign={campaign}
                 isMaster
                 href={`/campanhas/${campaign.id}/mestre`}
+                onDelete={() => deleteCampaign(campaign.id)}
               />
             ))}
           </div>

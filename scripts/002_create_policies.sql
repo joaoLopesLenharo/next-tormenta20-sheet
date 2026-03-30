@@ -26,6 +26,37 @@ ALTER FUNCTION public.campaign_member_exists(uuid, uuid) OWNER TO postgres;
 REVOKE ALL ON FUNCTION public.campaign_member_exists(uuid, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.campaign_member_exists(uuid, uuid) TO authenticated;
 
+-- FUNÇÃO: verificar se dois usuários compartilham uma campanha
+CREATE OR REPLACE FUNCTION public.shares_campaign_with(p_user_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.campaign_members cm
+    JOIN public.campaigns c ON c.id = cm.campaign_id
+    WHERE cm.user_id = p_user_id AND c.master_id = auth.uid()
+  ) OR EXISTS (
+    SELECT 1 FROM public.campaigns c
+    JOIN public.campaign_members cm ON cm.campaign_id = c.id
+    WHERE c.master_id = p_user_id AND cm.user_id = auth.uid()
+  ) OR EXISTS (
+    SELECT 1 FROM public.campaign_members cm1
+    JOIN public.campaign_members cm2 ON cm1.campaign_id = cm2.campaign_id
+    WHERE cm1.user_id = auth.uid() AND cm2.user_id = p_user_id
+  ) OR (auth.uid() = p_user_id);
+$$;
+
+ALTER FUNCTION public.shares_campaign_with(uuid) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.shares_campaign_with(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.shares_campaign_with(uuid) TO authenticated;
+
+-- PROFILES: permitir ver perfis de participantes da mesma campanha
+CREATE POLICY "profiles_select_campaign_peers" ON public.profiles
+  FOR SELECT USING (public.shares_campaign_with(id));
+
 -- CAMPAIGNS POLICIES
 CREATE POLICY "campaigns_master_all" ON public.campaigns 
   FOR ALL USING (auth.uid() = master_id);

@@ -37,6 +37,9 @@ import {
   Check,
   X,
   History,
+  Heart,
+  Zap,
+  Droplets,
 } from 'lucide-react'
 import { DiceRollCard } from '@/components/dice/dice-roll-card'
 import { DiceAnimation } from '@/components/dice/dice-animation'
@@ -99,6 +102,87 @@ export function PlayerPanel({
   // Tab principal (sessao vs ficha)
   const [mainTab, setMainTab] = useState<'sessao' | 'ficha'>('sessao')
 
+  // Dados das perícias para cálculo automático
+  const skillsData: Record<string, { attr: string; armorPenalty?: boolean; trainedOnly?: boolean }> = {
+    'Acrobacia': { attr: 'destreza', armorPenalty: true },
+    'Adestramento': { attr: 'carisma', trainedOnly: true },
+    'Atletismo': { attr: 'forca' },
+    'Atuação': { attr: 'carisma' },
+    'Cavalgar': { attr: 'destreza' },
+    'Conhecimento': { attr: 'inteligencia', trainedOnly: true },
+    'Cura': { attr: 'sabedoria' },
+    'Diplomacia': { attr: 'carisma' },
+    'Enganação': { attr: 'carisma' },
+    'Fortitude': { attr: 'constituicao' },
+    'Furtividade': { attr: 'destreza', armorPenalty: true },
+    'Guerra': { attr: 'inteligencia', trainedOnly: true },
+    'Iniciativa': { attr: 'destreza' },
+    'Intimidação': { attr: 'carisma' },
+    'Intuição': { attr: 'sabedoria' },
+    'Investigação': { attr: 'inteligencia' },
+    'Jogatina': { attr: 'carisma', trainedOnly: true },
+    'Ladinagem': { attr: 'destreza', trainedOnly: true, armorPenalty: true },
+    'Luta': { attr: 'forca' },
+    'Misticismo': { attr: 'inteligencia', trainedOnly: true },
+    'Nobreza': { attr: 'inteligencia', trainedOnly: true },
+    'Ofício': { attr: 'inteligencia', trainedOnly: true },
+    'Percepção': { attr: 'sabedoria' },
+    'Pilotagem': { attr: 'destreza', trainedOnly: true },
+    'Pontaria': { attr: 'destreza' },
+    'Reflexos': { attr: 'destreza' },
+    'Religião': { attr: 'sabedoria', trainedOnly: true },
+    'Sobrevivência': { attr: 'sabedoria' },
+    'Vontade': { attr: 'sabedoria' },
+  }
+
+  // Auto-load ficha do localStorage ao montar
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('t20_sheets')
+      if (raw) {
+        const sheets = JSON.parse(raw)
+        const activeId = localStorage.getItem('t20_active_sheet_id')
+        const activeSheet = sheets.find((s: any) => s.id === activeId) || sheets[0]
+        if (activeSheet?.data) {
+          setLoadedCharacter(activeSheet.data)
+          if (!characterName && activeSheet.data.nome) {
+            setCharacterName(activeSheet.data.nome)
+          }
+        }
+      }
+    } catch { /* ignore */ }
+  }, [])
+
+  // Calcula o modificador de uma perícia baseado na ficha carregada
+  const getSkillModFromCharacter = (skillName: string): number | null => {
+    if (!loadedCharacter) return null
+    const sd = skillsData[skillName]
+    if (!sd) return null
+
+    const skill = loadedCharacter.pericias?.[skillName] || {}
+    const selectedAttr = (skill.atributo || sd.attr).toLowerCase()
+    const attrValue = loadedCharacter.atributos?.[selectedAttr] || 10
+    const attrMod = Math.floor((attrValue - 10) / 2)
+
+    const totalLevel = (loadedCharacter.classes || []).reduce(
+      (acc: number, c: any) => acc + (parseInt(c.nivel) || 0), 0
+    ) || loadedCharacter.nivel || 1
+    const halfLevel = Math.floor(totalLevel / 2)
+
+    let trainingBonus = 0
+    const isTrained = skill.treinada === true || (typeof skill.treinada === 'string' && skill.treinada !== 'destreinado')
+    if (isTrained) {
+      if (totalLevel >= 15) trainingBonus = 6
+      else if (totalLevel >= 7) trainingBonus = 4
+      else trainingBonus = 2
+    }
+
+    const outros = skill.outros || 0
+    const bonusExtra = typeof skill.bonusExtra === 'number' ? skill.bonusExtra : parseInt(skill.bonusExtra) || 0
+
+    return halfLevel + attrMod + trainingBonus + outros + bonusExtra
+  }
+
   // Formulario de Pericia
   const [selectedSkill, setSelectedSkill] = useState<string>('')
   const [skillModifier, setSkillModifier] = useState('')
@@ -118,6 +202,16 @@ export function PlayerPanel({
 
   // Observacao geral
   const [observation, setObservation] = useState('')
+
+  // Auto-preencher modificador quando perícia é selecionada
+  useEffect(() => {
+    if (selectedSkill && loadedCharacter) {
+      const mod = getSkillModFromCharacter(selectedSkill)
+      if (mod !== null) {
+        setSkillModifier(mod.toString())
+      }
+    }
+  }, [selectedSkill, loadedCharacter])
 
   const addToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     const id = Math.random().toString(36).substr(2, 9)
@@ -376,6 +470,91 @@ export function PlayerPanel({
           <div className="grid gap-6 lg:grid-cols-2">
             {/* Roladores */}
             <div className="space-y-6">
+              {/* Barra de Status do Personagem */}
+              {loadedCharacter && (
+                <Card className="section-card">
+                  <CardContent className="pt-4 pb-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <span className="text-sm font-bold text-primary">
+                          {(loadedCharacter.nome || 'P')[0].toUpperCase()}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm">{loadedCharacter.nome || 'Personagem'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {loadedCharacter.raca}{loadedCharacter.classes?.length > 0 ? ` • ${loadedCharacter.classes.map((c: any) => `${c.nome || 'Classe'} ${c.nivel || 1}`).join(', ')}` : ''}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Recursos */}
+                    <div className="grid grid-cols-3 gap-2 mb-3">
+                      <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2 text-center">
+                        <Heart className="w-3.5 h-3.5 text-red-500 mx-auto mb-0.5" />
+                        <p className="text-xs text-muted-foreground">Vida</p>
+                        <p className="text-sm font-bold text-red-400">
+                          {loadedCharacter.recursos?.vida?.atual ?? 0}/{loadedCharacter.recursos?.vida?.maximo ?? 0}
+                        </p>
+                      </div>
+                      <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-2 text-center">
+                        <Zap className="w-3.5 h-3.5 text-blue-500 mx-auto mb-0.5" />
+                        <p className="text-xs text-muted-foreground">Mana</p>
+                        <p className="text-sm font-bold text-blue-400">
+                          {loadedCharacter.recursos?.mana?.atual ?? 0}/{loadedCharacter.recursos?.mana?.maximo ?? 0}
+                        </p>
+                      </div>
+                      <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-2 text-center">
+                        <Droplets className="w-3.5 h-3.5 text-yellow-500 mx-auto mb-0.5" />
+                        <p className="text-xs text-muted-foreground">Prana</p>
+                        <p className="text-sm font-bold text-yellow-400">
+                          {loadedCharacter.recursos?.prana?.atual ?? 0}/{loadedCharacter.recursos?.prana?.maximo ?? 0}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Atributos */}
+                    <div className="grid grid-cols-6 gap-1">
+                      {(['forca', 'destreza', 'constituicao', 'inteligencia', 'sabedoria', 'carisma'] as const).map((attr) => {
+                        const labels: Record<string, string> = {
+                          forca: 'FOR', destreza: 'DES',
+                          constituicao: 'CON', inteligencia: 'INT',
+                          sabedoria: 'SAB', carisma: 'CAR'
+                        }
+                        const value = loadedCharacter.atributos?.[attr] || 10
+                        const mod = Math.floor((value - 10) / 2)
+                        return (
+                          <div key={attr} className="bg-muted/50 rounded-lg p-1 text-center">
+                            <p className="text-[10px] text-muted-foreground font-medium">{labels[attr]}</p>
+                            <p className="text-xs font-bold">{value}</p>
+                            <p className="text-[10px] text-primary font-mono">{mod >= 0 ? '+' : ''}{mod}</p>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* Defesa e Recursos extras */}
+                    <div className="flex items-center gap-3 mt-3 pt-2 border-t border-border/50">
+                      <div className="flex items-center gap-1">
+                        <Shield className="w-3.5 h-3.5 text-primary" />
+                        <span className="text-xs text-muted-foreground">Defesa:</span>
+                        <span className="text-xs font-bold">{(() => {
+                          const base = 10
+                          const selectedAttrs = loadedCharacter.defenseAttributes || (loadedCharacter.defenseAttribute ? [loadedCharacter.defenseAttribute] : ['destreza'])
+                          const attrMod = selectedAttrs.reduce((sum: number, a: string) => sum + Math.floor(((loadedCharacter.atributos?.[a] || 10) - 10) / 2), 0)
+                          const equippedArmor = loadedCharacter.inventario?.armaduras?.find((a: any) => a.equipada && a.categoria !== 'escudo')
+                          const equippedShield = loadedCharacter.inventario?.armaduras?.find((a: any) => a.equipada && a.categoria === 'escudo')
+                          return base + attrMod + (equippedArmor?.ca || 0) + (equippedShield?.ca || 0) + (loadedCharacter.defesa_outros || 0)
+                        })()}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-muted-foreground">Desl:</span>
+                        <span className="text-xs font-bold">{loadedCharacter.deslocamento || 9}m</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
               <Tabs defaultValue="pericia" className="w-full">
                 <TabsList className="grid w-full grid-cols-5">
                   <TabsTrigger value="pericia" className="text-xs sm:text-sm">

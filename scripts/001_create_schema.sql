@@ -17,6 +17,8 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "profiles_select_own" ON public.profiles FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "profiles_insert_own" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "profiles_update_own" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+-- Nota: a política profiles_select_campaign_peers é criada em 002_create_policies.sql
+-- (depende da função shares_campaign_with que precisa de campaign_members existindo)
 
 -- 2. CAMPAIGNS TABLE
 CREATE TABLE IF NOT EXISTS public.campaigns (
