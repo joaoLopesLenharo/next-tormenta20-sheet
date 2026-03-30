@@ -49,7 +49,7 @@ export default function SignUpPage() {
       email,
       password,
       options: {
-        emailRedirectTo: `${getBaseUrl()}/campanhas`,
+        emailRedirectTo: `${getBaseUrl()}/auth/callback`,
         data: {
           display_name: displayName || email.split('@')[0],
         },

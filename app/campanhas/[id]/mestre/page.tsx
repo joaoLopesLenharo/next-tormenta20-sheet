@@ -36,19 +36,27 @@ export default async function MasterPage({ params }: MasterPageProps) {
     .eq('is_active', true)
     .single()
 
-  // Buscar membros da campanha usando Service Role para garantir que o mestre veja todos (bypassa RLS problemáticos)
-  const { createClient: createAdminClient } = await import('@supabase/supabase-js')
-  const adminAuth = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-  const { data: members, error: membersError } = await adminAuth
-    .from('campaign_members')
-    .select('*, profiles(*)')
-    .eq('campaign_id', id)
+  // Buscar membros da campanha via API Route segura (usa Service Role Key no servidor)
+  const { getBaseUrl } = await import('@/lib/get-base-url')
+  let members: any[] = []
+  try {
+    // Extrair cookies para repassar na requisição interna
+    const { cookies } = await import('next/headers')
+    const cookieStore = await cookies()
+    const cookieHeader = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ')
 
-  if (membersError) {
-    console.error('Error fetching members:', membersError)
+    const res = await fetch(`${getBaseUrl()}/api/campaign-members?campaignId=${id}`, {
+      headers: { Cookie: cookieHeader },
+      cache: 'no-store',
+    })
+    if (res.ok) {
+      const json = await res.json()
+      members = json.members || []
+    } else {
+      console.error('Error fetching members:', res.status)
+    }
+  } catch (err) {
+    console.error('Error fetching members:', err)
   }
 
   // Buscar rolagens recentes se houver sessao ativa

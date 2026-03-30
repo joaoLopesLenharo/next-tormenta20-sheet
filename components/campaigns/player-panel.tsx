@@ -217,6 +217,83 @@ export function PlayerPanel({
   // Observacao geral
   const [observation, setObservation] = useState('')
 
+  // Estado para flash visual ao alterar recursos
+  const [resourceFlash, setResourceFlash] = useState<string | null>(null)
+
+  // Funções para alterar recursos (vida, mana, prana)
+  const updateResource = (resource: 'vida' | 'mana' | 'prana', delta: number) => {
+    if (!loadedCharacter) return
+    const current = loadedCharacter.recursos?.[resource]?.atual ?? 0
+    const max = loadedCharacter.recursos?.[resource]?.maximo ?? 0
+    const newValue = Math.max(0, Math.min(max, current + delta))
+
+    const updated = {
+      ...loadedCharacter,
+      recursos: {
+        ...loadedCharacter.recursos,
+        [resource]: {
+          ...loadedCharacter.recursos?.[resource],
+          atual: newValue,
+        }
+      }
+    }
+    setLoadedCharacter(updated)
+
+    // Salvar no localStorage
+    try {
+      const raw = localStorage.getItem('t20_sheets')
+      if (raw) {
+        const sheets = JSON.parse(raw)
+        const activeId = localStorage.getItem('t20_active_sheet_id')
+        const idx = sheets.findIndex((s: any) => s.id === activeId)
+        if (idx >= 0) {
+          sheets[idx].data = updated
+          localStorage.setItem('t20_sheets', JSON.stringify(sheets))
+        }
+      }
+    } catch { /* ignore */ }
+
+    // Flash visual
+    setResourceFlash(resource)
+    setTimeout(() => setResourceFlash(null), 300)
+  }
+
+  const setResourceValue = (resource: 'vida' | 'mana' | 'prana', value: number) => {
+    if (!loadedCharacter) return
+    const max = loadedCharacter.recursos?.[resource]?.maximo ?? 0
+    const newValue = Math.max(0, Math.min(max, value))
+
+    const updated = {
+      ...loadedCharacter,
+      recursos: {
+        ...loadedCharacter.recursos,
+        [resource]: {
+          ...loadedCharacter.recursos?.[resource],
+          atual: newValue,
+        }
+      }
+    }
+    setLoadedCharacter(updated)
+
+    // Salvar no localStorage
+    try {
+      const raw = localStorage.getItem('t20_sheets')
+      if (raw) {
+        const sheets = JSON.parse(raw)
+        const activeId = localStorage.getItem('t20_active_sheet_id')
+        const idx = sheets.findIndex((s: any) => s.id === activeId)
+        if (idx >= 0) {
+          sheets[idx].data = updated
+          localStorage.setItem('t20_sheets', JSON.stringify(sheets))
+        }
+      }
+    } catch { /* ignore */ }
+
+    // Flash visual
+    setResourceFlash(resource)
+    setTimeout(() => setResourceFlash(null), 300)
+  }
+
   // Auto-preencher modificador quando perícia é selecionada
   useEffect(() => {
     if (selectedSkill && loadedCharacter) {
@@ -565,28 +642,101 @@ export function PlayerPanel({
                       </div>
                     </div>
 
-                    {/* Recursos */}
+                    {/* Recursos Editáveis */}
                     <div className="grid grid-cols-3 gap-2 mb-3">
-                      <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2 text-center">
+                      {/* Vida */}
+                      <div className={`bg-red-500/10 border border-red-500/20 rounded-lg p-2 text-center transition-all ${resourceFlash === 'vida' ? 'ring-2 ring-red-500/50 scale-[1.02]' : ''}`}>
                         <Heart className="w-3.5 h-3.5 text-red-500 mx-auto mb-0.5" />
                         <p className="text-xs text-muted-foreground">Vida</p>
-                        <p className="text-sm font-bold text-red-400">
-                          {loadedCharacter.recursos?.vida?.atual ?? 0}/{loadedCharacter.recursos?.vida?.maximo ?? 0}
-                        </p>
+                        <div className="flex items-center justify-center gap-1 mt-1">
+                          <button
+                            className="w-5 h-5 rounded bg-red-500/20 hover:bg-red-500/40 flex items-center justify-center text-red-400 text-xs font-bold transition-colors"
+                            onClick={() => updateResource('vida', -1)}
+                          >−</button>
+                          <input
+                            type="number"
+                            className="w-10 text-center text-sm font-bold text-red-400 bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            value={loadedCharacter.recursos?.vida?.atual ?? 0}
+                            onChange={(e) => setResourceValue('vida', parseInt(e.target.value) || 0)}
+                          />
+                          <span className="text-xs text-red-500/60">/</span>
+                          <span className="text-xs text-red-500/60">{loadedCharacter.recursos?.vida?.maximo ?? 0}</span>
+                          <button
+                            className="w-5 h-5 rounded bg-red-500/20 hover:bg-red-500/40 flex items-center justify-center text-red-400 text-xs font-bold transition-colors"
+                            onClick={() => updateResource('vida', 1)}
+                          >+</button>
+                        </div>
+                        {/* Quick buttons */}
+                        <div className="flex gap-1 mt-1 justify-center">
+                          <button className="text-[9px] px-1 rounded bg-red-500/10 hover:bg-red-500/30 text-red-400 transition-colors"
+                            onClick={() => updateResource('vida', -5)}>-5</button>
+                          <button className="text-[9px] px-1 rounded bg-red-500/10 hover:bg-red-500/30 text-red-400 transition-colors"
+                            onClick={() => updateResource('vida', -10)}>-10</button>
+                          <button className="text-[9px] px-1 rounded bg-green-500/10 hover:bg-green-500/30 text-green-400 transition-colors"
+                            onClick={() => setResourceValue('vida', loadedCharacter.recursos?.vida?.maximo ?? 0)}>MAX</button>
+                        </div>
                       </div>
-                      <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-2 text-center">
+                      {/* Mana */}
+                      <div className={`bg-blue-500/10 border border-blue-500/20 rounded-lg p-2 text-center transition-all ${resourceFlash === 'mana' ? 'ring-2 ring-blue-500/50 scale-[1.02]' : ''}`}>
                         <Zap className="w-3.5 h-3.5 text-blue-500 mx-auto mb-0.5" />
                         <p className="text-xs text-muted-foreground">Mana</p>
-                        <p className="text-sm font-bold text-blue-400">
-                          {loadedCharacter.recursos?.mana?.atual ?? 0}/{loadedCharacter.recursos?.mana?.maximo ?? 0}
-                        </p>
+                        <div className="flex items-center justify-center gap-1 mt-1">
+                          <button
+                            className="w-5 h-5 rounded bg-blue-500/20 hover:bg-blue-500/40 flex items-center justify-center text-blue-400 text-xs font-bold transition-colors"
+                            onClick={() => updateResource('mana', -1)}
+                          >−</button>
+                          <input
+                            type="number"
+                            className="w-10 text-center text-sm font-bold text-blue-400 bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            value={loadedCharacter.recursos?.mana?.atual ?? 0}
+                            onChange={(e) => setResourceValue('mana', parseInt(e.target.value) || 0)}
+                          />
+                          <span className="text-xs text-blue-500/60">/</span>
+                          <span className="text-xs text-blue-500/60">{loadedCharacter.recursos?.mana?.maximo ?? 0}</span>
+                          <button
+                            className="w-5 h-5 rounded bg-blue-500/20 hover:bg-blue-500/40 flex items-center justify-center text-blue-400 text-xs font-bold transition-colors"
+                            onClick={() => updateResource('mana', 1)}
+                          >+</button>
+                        </div>
+                        <div className="flex gap-1 mt-1 justify-center">
+                          <button className="text-[9px] px-1 rounded bg-blue-500/10 hover:bg-blue-500/30 text-blue-400 transition-colors"
+                            onClick={() => updateResource('mana', -1)}>-1</button>
+                          <button className="text-[9px] px-1 rounded bg-blue-500/10 hover:bg-blue-500/30 text-blue-400 transition-colors"
+                            onClick={() => updateResource('mana', -3)}>-3</button>
+                          <button className="text-[9px] px-1 rounded bg-green-500/10 hover:bg-green-500/30 text-green-400 transition-colors"
+                            onClick={() => setResourceValue('mana', loadedCharacter.recursos?.mana?.maximo ?? 0)}>MAX</button>
+                        </div>
                       </div>
-                      <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-2 text-center">
+                      {/* Prana */}
+                      <div className={`bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-2 text-center transition-all ${resourceFlash === 'prana' ? 'ring-2 ring-yellow-500/50 scale-[1.02]' : ''}`}>
                         <Droplets className="w-3.5 h-3.5 text-yellow-500 mx-auto mb-0.5" />
                         <p className="text-xs text-muted-foreground">Prana</p>
-                        <p className="text-sm font-bold text-yellow-400">
-                          {loadedCharacter.recursos?.prana?.atual ?? 0}/{loadedCharacter.recursos?.prana?.maximo ?? 0}
-                        </p>
+                        <div className="flex items-center justify-center gap-1 mt-1">
+                          <button
+                            className="w-5 h-5 rounded bg-yellow-500/20 hover:bg-yellow-500/40 flex items-center justify-center text-yellow-400 text-xs font-bold transition-colors"
+                            onClick={() => updateResource('prana', -1)}
+                          >−</button>
+                          <input
+                            type="number"
+                            className="w-10 text-center text-sm font-bold text-yellow-400 bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            value={loadedCharacter.recursos?.prana?.atual ?? 0}
+                            onChange={(e) => setResourceValue('prana', parseInt(e.target.value) || 0)}
+                          />
+                          <span className="text-xs text-yellow-500/60">/</span>
+                          <span className="text-xs text-yellow-500/60">{loadedCharacter.recursos?.prana?.maximo ?? 0}</span>
+                          <button
+                            className="w-5 h-5 rounded bg-yellow-500/20 hover:bg-yellow-500/40 flex items-center justify-center text-yellow-400 text-xs font-bold transition-colors"
+                            onClick={() => updateResource('prana', 1)}
+                          >+</button>
+                        </div>
+                        <div className="flex gap-1 mt-1 justify-center">
+                          <button className="text-[9px] px-1 rounded bg-yellow-500/10 hover:bg-yellow-500/30 text-yellow-400 transition-colors"
+                            onClick={() => updateResource('prana', -1)}>-1</button>
+                          <button className="text-[9px] px-1 rounded bg-yellow-500/10 hover:bg-yellow-500/30 text-yellow-400 transition-colors"
+                            onClick={() => updateResource('prana', -3)}>-3</button>
+                          <button className="text-[9px] px-1 rounded bg-green-500/10 hover:bg-green-500/30 text-green-400 transition-colors"
+                            onClick={() => setResourceValue('prana', loadedCharacter.recursos?.prana?.maximo ?? 0)}>MAX</button>
+                        </div>
                       </div>
                     </div>
 

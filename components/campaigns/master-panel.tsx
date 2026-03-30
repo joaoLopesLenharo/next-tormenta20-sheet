@@ -38,6 +38,7 @@ import {
   Eye,
   EyeOff,
   History,
+  Shield,
 } from 'lucide-react'
 import { DiceRollCard } from '@/components/dice/dice-roll-card'
 import { MasterDiceRoller } from '@/components/dice/master-dice-roller'
@@ -325,36 +326,125 @@ export function MasterPanel({
               </CardHeader>
               <CardContent>
                 {members.length > 0 ? (
-                  <ul className="space-y-2">
-                    {members.map((member) => (
-                      <li
-                        key={member.id}
-                        className="flex items-center justify-between p-2 pl-3 rounded-lg bg-muted/50 border border-border/50 hover:bg-muted/70 transition-colors"
-                      >
-                        <div>
-                          <p className="text-sm font-medium">
-                            {member.profiles?.display_name || 'Jogador'}
-                          </p>
-                          {member.character_name && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <span className={member.character_data ? "text-green-500/80" : ""}>
-                                {member.character_data ? '✓' : ''} 
+                  <div className="space-y-3">
+                    {members.map((member) => {
+                      const char = member.character_data
+                      const hasSheet = !!char
+                      const vida = char?.recursos?.vida
+                      const mana = char?.recursos?.mana
+                      const prana = char?.recursos?.prana
+                      const vidaPct = vida?.maximo ? Math.min(100, Math.max(0, (vida.atual / vida.maximo) * 100)) : 0
+                      const manaPct = mana?.maximo ? Math.min(100, Math.max(0, (mana.atual / mana.maximo) * 100)) : 0
+                      const pranaPct = prana?.maximo ? Math.min(100, Math.max(0, (prana.atual / prana.maximo) * 100)) : 0
+
+                      return (
+                        <div
+                          key={member.id}
+                          className="rounded-xl bg-muted/40 border border-border/50 hover:bg-muted/60 transition-all overflow-hidden"
+                        >
+                          {/* Header do card */}
+                          <div className="flex items-center gap-3 p-3">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${hasSheet ? 'bg-primary/10' : 'bg-muted/80'}`}>
+                              <span className={`text-sm font-bold ${hasSheet ? 'text-primary' : 'text-muted-foreground'}`}>
+                                {(char?.nome || member.profiles?.display_name || 'J')[0].toUpperCase()}
                               </span>
-                              {member.character_name}
-                            </p>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold truncate">
+                                {char?.nome || member.character_name || member.profiles?.display_name || 'Jogador'}
+                              </p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {hasSheet ? (
+                                  <>
+                                    {char.raca || 'Raça?'}
+                                    {char.classes?.length > 0 && ` • ${char.classes.map((c: any) => `${c.nome || '?'} ${c.nivel || 1}`).join(', ')}`}
+                                  </>
+                                ) : (
+                                  <span className="italic">Ficha não carregada</span>
+                                )}
+                              </p>
+                            </div>
+                            <Button 
+                              variant="secondary" 
+                              size="sm" 
+                              className="text-xs px-2 h-7 shrink-0"
+                              onClick={() => setSelectedMemberSheet(member)}
+                            >
+                              Ver Ficha
+                            </Button>
+                          </div>
+
+                          {/* Barras de recursos */}
+                          {hasSheet && (vida?.maximo > 0 || mana?.maximo > 0 || prana?.maximo > 0) && (
+                            <div className="px-3 pb-3 space-y-1.5">
+                              {/* Vida */}
+                              {vida?.maximo > 0 && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-medium text-red-400 w-7">PV</span>
+                                  <div className="flex-1 h-2 rounded-full bg-red-500/10 overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full transition-all duration-500 ${
+                                        vidaPct > 50 ? 'bg-red-500' : vidaPct > 25 ? 'bg-orange-500' : 'bg-red-700 animate-pulse'
+                                      }`}
+                                      style={{ width: `${vidaPct}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-[10px] font-mono text-red-400/80 w-14 text-right">
+                                    {vida.atual}/{vida.maximo}
+                                  </span>
+                                </div>
+                              )}
+                              {/* Mana */}
+                              {mana?.maximo > 0 && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-medium text-blue-400 w-7">PM</span>
+                                  <div className="flex-1 h-2 rounded-full bg-blue-500/10 overflow-hidden">
+                                    <div
+                                      className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                                      style={{ width: `${manaPct}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-[10px] font-mono text-blue-400/80 w-14 text-right">
+                                    {mana.atual}/{mana.maximo}
+                                  </span>
+                                </div>
+                              )}
+                              {/* Prana */}
+                              {prana?.maximo > 0 && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-medium text-yellow-400 w-7">PP</span>
+                                  <div className="flex-1 h-2 rounded-full bg-yellow-500/10 overflow-hidden">
+                                    <div
+                                      className="h-full rounded-full bg-yellow-500 transition-all duration-500"
+                                      style={{ width: `${pranaPct}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-[10px] font-mono text-yellow-400/80 w-14 text-right">
+                                    {prana.atual}/{prana.maximo}
+                                  </span>
+                                </div>
+                              )}
+                              {/* Defesa */}
+                              <div className="flex items-center gap-3 pt-1">
+                                <div className="flex items-center gap-1">
+                                  <Shield className="w-3 h-3 text-primary/60" />
+                                  <span className="text-[10px] text-muted-foreground">CA</span>
+                                  <span className="text-xs font-bold">{(() => {
+                                    const base = 10
+                                    const selectedAttrs = char.defenseAttributes || (char.defenseAttribute ? [char.defenseAttribute] : ['destreza'])
+                                    const attrMod = selectedAttrs.reduce((sum: number, a: string) => sum + Math.floor(((char.atributos?.[a] || 10) - 10) / 2), 0)
+                                    const equippedArmor = char.inventario?.armaduras?.find((a: any) => a.equipada && a.categoria !== 'escudo')
+                                    const equippedShield = char.inventario?.armaduras?.find((a: any) => a.equipada && a.categoria === 'escudo')
+                                    return base + attrMod + (equippedArmor?.ca || 0) + (equippedShield?.ca || 0) + (char.defesa_outros || 0)
+                                  })()}</span>
+                                </div>
+                              </div>
+                            </div>
                           )}
                         </div>
-                        <Button 
-                          variant="secondary" 
-                          size="sm" 
-                          className="text-xs px-2 h-7"
-                          onClick={() => setSelectedMemberSheet(member)}
-                        >
-                          Ver Ficha
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
+                      )
+                    })}
+                  </div>
                 ) : (
                   <p className="text-sm text-muted-foreground text-center py-4">
                     Nenhum jogador ainda. Compartilhe o codigo de convite!
