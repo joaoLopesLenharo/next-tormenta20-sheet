@@ -22,9 +22,28 @@ AS $$
 $$;
 
 ALTER FUNCTION public.campaign_member_exists(uuid, uuid) OWNER TO postgres;
-
 REVOKE ALL ON FUNCTION public.campaign_member_exists(uuid, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.campaign_member_exists(uuid, uuid) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.is_campaign_master(
+  p_user_id uuid,
+  p_campaign_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.campaigns
+    WHERE id = p_campaign_id AND master_id = p_user_id
+  );
+$$;
+
+ALTER FUNCTION public.is_campaign_master(uuid, uuid) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.is_campaign_master(uuid, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.is_campaign_master(uuid, uuid) TO authenticated;
 
 -- FUNÇÃO: verificar se dois usuários compartilham uma campanha
 CREATE OR REPLACE FUNCTION public.shares_campaign_with(p_user_id uuid)
@@ -69,14 +88,13 @@ CREATE POLICY "campaigns_members_select" ON public.campaigns
 -- CAMPAIGN MEMBERS POLICIES
 CREATE POLICY "campaign_members_master_all" ON public.campaign_members 
   FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM public.campaigns 
-      WHERE id = campaign_members.campaign_id AND master_id = auth.uid()
-    )
+    public.is_campaign_master(auth.uid(), campaign_id)
   );
 
 CREATE POLICY "campaign_members_select" ON public.campaign_members 
   FOR SELECT USING (
+    public.is_campaign_master(auth.uid(), campaign_id) 
+    OR
     public.campaign_member_exists(auth.uid(), campaign_id)
   );
 

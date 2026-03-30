@@ -37,10 +37,14 @@ export default async function MasterPage({ params }: MasterPageProps) {
     .single()
 
   // Buscar membros da campanha
-  const { data: members } = await supabase
+  const { data: members, error: membersError } = await supabase
     .from('campaign_members')
     .select('*, profiles(*)')
     .eq('campaign_id', id)
+
+  if (membersError) {
+    console.error('Error fetching members:', membersError)
+  }
 
   // Buscar rolagens recentes se houver sessao ativa
   let recentRolls: unknown[] = []

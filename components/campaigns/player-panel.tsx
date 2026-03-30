@@ -224,12 +224,75 @@ export function PlayerPanel({
 
   // Melhoria 3: Handler para importação de ficha
   const handleImportSheet = (character: any, sheetName: string) => {
+    // Salvar no localStorage (mesmo formato do app/page.tsx)
+    try {
+      const raw = localStorage.getItem('t20_sheets')
+      const sheets: Array<{ id: string; meta: { nome: string; nivel: number }; data: any }> = raw ? JSON.parse(raw) : []
+
+      const totalLevel = (character.classes || []).reduce(
+        (acc: number, c: any) => acc + (parseInt(c.nivel) || 0), 0
+      ) || character.nivel || 1
+
+      // Verificar se já existe uma ficha com o mesmo nome
+      const existingIndex = sheets.findIndex(
+        (s) => (s.meta?.nome || s.data?.nome || '').toLowerCase() === sheetName.toLowerCase()
+      )
+
+      if (existingIndex >= 0) {
+        const replace = confirm(
+          `Já existe uma ficha chamada "${sheetName}". Deseja substituí-la?\n\n` +
+          `• OK = Substituir a ficha existente\n` +
+          `• Cancelar = Criar uma nova ficha com o mesmo nome`
+        )
+
+        if (replace) {
+          // Substituir a ficha existente
+          sheets[existingIndex] = {
+            ...sheets[existingIndex],
+            data: character,
+            meta: { nome: sheetName, nivel: totalLevel },
+          }
+          localStorage.setItem('t20_sheets', JSON.stringify(sheets))
+          localStorage.setItem('t20_active_sheet_id', sheets[existingIndex].id)
+        } else {
+          // Criar nova ficha com o mesmo nome
+          const newId = 't20_' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4)
+          const newSheet = {
+            id: newId,
+            meta: { nome: sheetName, nivel: totalLevel },
+            data: character,
+          }
+          sheets.push(newSheet)
+          localStorage.setItem('t20_sheets', JSON.stringify(sheets))
+          localStorage.setItem('t20_active_sheet_id', newId)
+        }
+      } else {
+        // Criar nova ficha
+        const newId = 't20_' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4)
+        const newSheet = {
+          id: newId,
+          meta: { nome: sheetName, nivel: totalLevel },
+          data: character,
+        }
+        sheets.push(newSheet)
+        localStorage.setItem('t20_sheets', JSON.stringify(sheets))
+        localStorage.setItem('t20_active_sheet_id', newId)
+      }
+    } catch (err) {
+      console.error('Error saving to localStorage:', err)
+    }
+
     setLoadedCharacter(character)
-    // Atualiza o nome do personagem se ainda não foi definido
-    if (!characterName && sheetName) {
+
+    // Atualiza o nome do personagem
+    if (sheetName) {
       setCharacterName(sheetName)
     }
-    addToast(`Ficha "${sheetName}" carregada com sucesso!`, 'success')
+
+    // Mudar para a aba "Ficha Completa"
+    setMainTab('ficha')
+
+    addToast(`Ficha "${sheetName}" carregada e salva com sucesso!`, 'success')
   }
   
   const saveCharacterName = async () => {
