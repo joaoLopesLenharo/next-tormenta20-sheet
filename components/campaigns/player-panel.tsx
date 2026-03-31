@@ -1,7 +1,5 @@
 'use client'
 
-import dynamic from 'next/dynamic'
-
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -52,10 +50,8 @@ import type { Campaign, CampaignMember, Session, DiceRoll, RollType } from '@/li
 import { ImportSheetDialog } from '@/components/campaigns/import-sheet-dialog'
 import { Upload } from 'lucide-react'
 import { InitiativeTracker } from '@/components/campaigns/initiative-tracker'
+import { CharacterSheetView } from '@/components/campaigns/character-sheet-view'
 import type { InitiativeEntry, Profile } from '@/lib/types/database'
-
-// Import dinÃ¢mico do CharacterSheet para evitar SSR issues
-const CharacterSheet = dynamic(() => import('@/app/page'), { ssr: false })
 
 interface MemberWithProfile extends CampaignMember {
   profiles: Profile
@@ -1114,10 +1110,39 @@ export function PlayerPanel({
           </TabsContent>
 
           {/* Tab Ficha Completa */}
-          <TabsContent value="ficha">
-            <div className="-mx-4 sm:mx-0">
-              <CharacterSheet />
-            </div>
+          <TabsContent value="ficha" className="mt-0 h-[calc(100svh-8rem)]">
+            {loadedCharacter ? (
+              <div className="h-full rounded-xl border border-border/50 overflow-hidden bg-card/50">
+                <CharacterSheetView
+                  character={loadedCharacter}
+                  readOnly={false}
+                  onResourceChange={(resource, newValue) => {
+                    setResourceValue(resource, newValue)
+                  }}
+                  onRollSkill={(skillName, total) => {
+                    const mod = total
+                    const formula = createD20Formula(mod)
+                    performRoll(formula, 'pericia', skillName)
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center gap-4 text-center p-8">
+                <Sparkles className="w-16 h-16 text-muted-foreground/20" />
+                <div>
+                  <h3 className="text-lg font-semibold mb-1">Nenhuma ficha carregada</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Importe uma ficha usando o botão &quot;Importar Ficha&quot; no topo da página.
+                  </p>
+                </div>
+                <ImportSheetDialog onImport={handleImportSheet}>
+                  <Button variant="outline">
+                    <Upload className="w-4 h-4 mr-2" />
+                    Importar Ficha
+                  </Button>
+                </ImportSheetDialog>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </main>

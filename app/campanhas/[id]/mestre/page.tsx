@@ -36,27 +36,40 @@ export default async function MasterPage({ params }: MasterPageProps) {
     .eq('is_active', true)
     .single()
 
-  // Buscar membros da campanha via API Route segura (usa Service Role Key no servidor)
-  const { getBaseUrl } = await import('@/lib/get-base-url')
+  // Buscar membros da campanha diretamente no servidor com a chave de serviço,
+  // evitando chamadas HTTP internas que dependem de variáveis de ambiente de URL.
   let members: any[] = []
-  try {
-    // Extrair cookies para repassar na requisição interna
-    const { cookies } = await import('next/headers')
-    const cookieStore = await cookies()
-    const cookieHeader = cookieStore.getAll().map(c => `${c.name}=${c.value}`).join('; ')
-
-    const res = await fetch(`${getBaseUrl()}/api/campaign-members?campaignId=${id}`, {
-      headers: { Cookie: cookieHeader },
-      cache: 'no-store',
-    })
-    if (res.ok) {
-      const json = await res.json()
-      members = json.members || []
-    } else {
-      console.error('Error fetching members:', res.status)
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (serviceRoleKey && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    try {
+      const { createClient: createAdminClient } = await import('@supabase/supabase-js')
+      const admin = createAdminClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        serviceRoleKey
+      )
+      const { data: membersData, error: membersError } = await admin
+        .from('campaign_members')
+        .select('*, profiles(*)')
+        .eq('campaign_id', id)
+      if (!membersError) {
+        members = membersData || []
+      } else {
+        console.error('[mestre/page] Error fetching members via admin:', membersError)
+      }
+    } catch (err) {
+      console.error('[mestre/page] Error creating admin client:', err)
     }
-  } catch (err) {
-    console.error('Error fetching members:', err)
+  } else {
+    // Fallback: buscar via RLS (pode retornar apenas o próprio usuário dependendo das policies)
+    try {
+      const { data: membersData } = await supabase
+        .from('campaign_members')
+        .select('*, profiles(*)')
+        .eq('campaign_id', id)
+      members = membersData || []
+    } catch (err) {
+      console.error('[mestre/page] Fallback members fetch error:', err)
+    }
   }
 
   // Buscar rolagens recentes se houver sessao ativa
