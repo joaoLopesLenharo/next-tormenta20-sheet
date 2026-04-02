@@ -50,8 +50,17 @@ import type { Campaign, CampaignMember, Session, DiceRoll, RollType } from '@/li
 import { ImportSheetDialog } from '@/components/campaigns/import-sheet-dialog'
 import { Upload } from 'lucide-react'
 import { InitiativeTracker } from '@/components/campaigns/initiative-tracker'
-import { CharacterSheetView } from '@/components/campaigns/character-sheet-view'
+import { CharacterSheetFull } from '@/components/campaigns/character-sheet-full'
+import { CharacterSelector } from '@/components/campaigns/character-selector'
 import type { InitiativeEntry, Profile } from '@/lib/types/database'
+
+interface CharacterEntry {
+  id: string
+  name: string
+  data: any
+  createdAt?: string
+  updatedAt?: string
+}
 
 interface MemberWithProfile extends CampaignMember {
   profiles: Profile
@@ -80,8 +89,16 @@ export function PlayerPanel({
   const [characterName, setCharacterName] = useState(membership.character_name || '')
   const [editingName, setEditingName] = useState(false)
   
-  // Melhoria 3: Estado para ficha carregada/importada
+  // Estado para ficha carregada/importada
   const [loadedCharacter, setLoadedCharacter] = useState<any>(null)
+  
+  // Estado para múltiplos personagens
+  const [characters, setCharacters] = useState<CharacterEntry[]>([])
+  const [activeCharacterId, setActiveCharacterId] = useState<string | null>(null)
+  const [loadingCharacters, setLoadingCharacters] = useState(true)
+  const [savingCharacter, setSavingCharacter] = useState(false)
+  const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  
   const [savingName, setSavingName] = useState(false)
   const [rolling, setRolling] = useState(false)
   const [showAnimation, setShowAnimation] = useState(false)
@@ -131,23 +148,60 @@ export function PlayerPanel({
     'Vontade': { attr: 'sabedoria' },
   }
 
-  // Auto-load ficha do localStorage ao montar
+  // Carregar personagens da API ao montar
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('t20_sheets')
-      if (raw) {
-        const sheets = JSON.parse(raw)
-        const activeId = localStorage.getItem('t20_active_sheet_id')
-        const activeSheet = sheets.find((s: any) => s.id === activeId) || sheets[0]
-        if (activeSheet?.data) {
-          setLoadedCharacter(activeSheet.data)
-          if (!characterName && activeSheet.data.nome) {
-            setCharacterName(activeSheet.data.nome)
+    const loadCharactersFromAPI = async () => {
+      try {
+        setLoadingCharacters(true)
+        const res = await fetch(`/api/character?campaignId=${campaign.id}`)
+        if (res.ok) {
+          const data = await res.json()
+          setCharacters(data.characters || [])
+          setActiveCharacterId(data.activeCharacterId)
+          
+          // Carregar personagem ativo
+          const activeChar = data.characters?.find((c: CharacterEntry) => c.id === data.activeCharacterId)
+          if (activeChar?.data) {
+            setLoadedCharacter(activeChar.data)
+            if (!characterName && activeChar.data.nome) {
+              setCharacterName(activeChar.data.nome)
+            }
+          }
+        } else {
+          // Fallback para localStorage se API falhar
+          const raw = localStorage.getItem('t20_sheets')
+          if (raw) {
+            const sheets = JSON.parse(raw)
+            const activeId = localStorage.getItem('t20_active_sheet_id')
+            const activeSheet = sheets.find((s: any) => s.id === activeId) || sheets[0]
+            if (activeSheet?.data) {
+              setLoadedCharacter(activeSheet.data)
+              if (!characterName && activeSheet.data.nome) {
+                setCharacterName(activeSheet.data.nome)
+              }
+            }
           }
         }
+      } catch {
+        // Fallback para localStorage
+        try {
+          const raw = localStorage.getItem('t20_sheets')
+          if (raw) {
+            const sheets = JSON.parse(raw)
+            const activeId = localStorage.getItem('t20_active_sheet_id')
+            const activeSheet = sheets.find((s: any) => s.id === activeId) || sheets[0]
+            if (activeSheet?.data) {
+              setLoadedCharacter(activeSheet.data)
+            }
+          }
+        } catch { /* ignore */ }
+      } finally {
+        setLoadingCharacters(false)
       }
-    } catch { /* ignore */ }
-  }, [])
+    }
+    
+    loadCharactersFromAPI()
+  }, [campaign.id])
 
   // Calcula o modificador de uma perícia baseado na ficha carregada
   const getSkillModFromCharacter = (skillName: string): number | null => {
@@ -179,19 +233,147 @@ export function PlayerPanel({
     return halfLevel + attrMod + trainingBonus + outros + bonusExtra
   }
 
-  // Sincronizar a ficha inteira com o Supabase para o Mestre
-  useEffect(() => {
-    if (loadedCharacter && membership?.id) {
-      const syncToSupabase = async () => {
-        const supabase = createClient()
-        await supabase
-          .from('campaign_members')
-          .update({ character_data: loadedCharacter })
-          .eq('id', membership.id)
+  // Função para salvar personagem na API
+  const saveCharacterToAPI = async (charData: any) => {
+    if (!activeCharacterId) return
+    
+    setSavingCharacter(true)
+    try {
+      const res = await fetch('/api/character', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          campaignId: campaign.id,
+          characterId: activeCharacterId,
+          characterData: charData,
+          setAsActive: true,
+        }),
+      })
+      
+      if (res.ok) {
+        const data = await res.json()
+        setCharacters(data.characters || [])
+        setLastSaved(new Date())
       }
-      syncToSupabase()
+    } catch (error) {
+      console.error('[v0] Error saving character:', error)
+    } finally {
+      setSavingCharacter(false)
     }
-  }, [loadedCharacter, membership?.id])
+  }
+
+  // Função para trocar personagem ativo
+  const handleSelectCharacter = async (charId: string) => {
+    const char = characters.find(c => c.id === charId)
+    if (!char) return
+    
+    setActiveCharacterId(charId)
+    setLoadedCharacter(char.data)
+    setCharacterName(char.name)
+    
+    // Atualizar no servidor
+    try {
+      await fetch('/api/character', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          campaignId: campaign.id,
+          characterId: charId,
+        }),
+      })
+    } catch (error) {
+      console.error('[v0] Error switching character:', error)
+    }
+  }
+
+  // Função para criar novo personagem
+  const handleCreateCharacter = async (name: string) => {
+    const defaultCharacter = {
+      nome: name,
+      nivel: 1,
+      raca: '',
+      classes: [],
+      divindade: '',
+      tendencia: '',
+      origem: '',
+      deslocamento: 9,
+      atributos: {
+        forca: 10,
+        destreza: 10,
+        constituicao: 10,
+        inteligencia: 10,
+        sabedoria: 10,
+        carisma: 10,
+      },
+      recursos: {
+        vida: { atual: 0, maximo: 0 },
+        mana: { atual: 0, maximo: 0 },
+        prana: { atual: 0, maximo: 0 },
+      },
+      pericias: {},
+      inventario: {
+        armas: [],
+        armaduras: [],
+        itens: [],
+        dinheiro: { 'T$': 0, PP: 0, PO: 0, PE: 0, PC: 0 },
+      },
+      habilidades: [],
+      poderes: [],
+      magias: [],
+    }
+
+    try {
+      const res = await fetch('/api/character', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          campaignId: campaign.id,
+          characterData: defaultCharacter,
+          setAsActive: true,
+        }),
+      })
+      
+      if (res.ok) {
+        const data = await res.json()
+        setCharacters(data.characters || [])
+        setActiveCharacterId(data.characterId)
+        const newChar = data.characters?.find((c: CharacterEntry) => c.id === data.characterId)
+        if (newChar?.data) {
+          setLoadedCharacter(newChar.data)
+          setCharacterName(newChar.name)
+        }
+      }
+    } catch (error) {
+      console.error('[v0] Error creating character:', error)
+    }
+  }
+
+  // Função para excluir personagem
+  const handleDeleteCharacter = async (charId: string) => {
+    try {
+      const res = await fetch(`/api/character?campaignId=${campaign.id}&characterId=${charId}`, {
+        method: 'DELETE',
+      })
+      
+      if (res.ok) {
+        const data = await res.json()
+        setCharacters(data.characters || [])
+        setActiveCharacterId(data.activeCharacterId)
+        
+        // Carregar novo personagem ativo
+        const newActiveChar = data.characters?.find((c: CharacterEntry) => c.id === data.activeCharacterId)
+        if (newActiveChar?.data) {
+          setLoadedCharacter(newActiveChar.data)
+          setCharacterName(newActiveChar.name)
+        } else {
+          setLoadedCharacter(null)
+          setCharacterName('')
+        }
+      }
+    } catch (error) {
+      console.error('[v0] Error deleting character:', error)
+    }
+  }
 
   // Formulario de Pericia
   const [selectedSkill, setSelectedSkill] = useState<string>('')
@@ -309,77 +491,109 @@ export function PlayerPanel({
     setToasts((prev) => prev.filter((t) => t.id !== id))
   }
 
-  // Melhoria 3: Handler para importação de ficha
-  const handleImportSheet = (character: any, sheetName: string) => {
-    // Salvar no localStorage (mesmo formato do app/page.tsx)
-    try {
-      const raw = localStorage.getItem('t20_sheets')
-      const sheets: Array<{ id: string; meta: { nome: string; nivel: number }; data: any }> = raw ? JSON.parse(raw) : []
+  // Handler para importação de ficha
+  const handleImportSheet = async (character: any, sheetName: string) => {
+    // Definir o nome no personagem importado
+    const charWithName = { ...character, nome: sheetName || character.nome }
+    
+    // Verificar se já existe um personagem com o mesmo nome
+    const existingChar = characters.find(
+      (c) => c.name.toLowerCase() === sheetName.toLowerCase()
+    )
 
-      const totalLevel = (character.classes || []).reduce(
-        (acc: number, c: any) => acc + (parseInt(c.nivel) || 0), 0
-      ) || character.nivel || 1
-
-      // Verificar se já existe uma ficha com o mesmo nome
-      const existingIndex = sheets.findIndex(
-        (s) => (s.meta?.nome || s.data?.nome || '').toLowerCase() === sheetName.toLowerCase()
+    if (existingChar) {
+      const replace = confirm(
+        `Já existe um personagem chamado "${sheetName}". Deseja substituí-lo?\n\n` +
+        `- OK = Substituir o personagem existente\n` +
+        `- Cancelar = Criar um novo personagem com o mesmo nome`
       )
 
-      if (existingIndex >= 0) {
-        const replace = confirm(
-          `Já existe uma ficha chamada "${sheetName}". Deseja substituí-la?\n\n` +
-          `• OK = Substituir a ficha existente\n` +
-          `• Cancelar = Criar uma nova ficha com o mesmo nome`
-        )
-
-        if (replace) {
-          // Substituir a ficha existente
-          sheets[existingIndex] = {
-            ...sheets[existingIndex],
-            data: character,
-            meta: { nome: sheetName, nivel: totalLevel },
+      if (replace) {
+        // Substituir personagem existente
+        try {
+          const res = await fetch('/api/character', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              campaignId: campaign.id,
+              characterId: existingChar.id,
+              characterData: charWithName,
+              setAsActive: true,
+            }),
+          })
+          
+          if (res.ok) {
+            const data = await res.json()
+            setCharacters(data.characters || [])
+            setActiveCharacterId(data.characterId || existingChar.id)
+            setLoadedCharacter(charWithName)
+            setCharacterName(sheetName)
+            setLastSaved(new Date())
           }
-          localStorage.setItem('t20_sheets', JSON.stringify(sheets))
-          localStorage.setItem('t20_active_sheet_id', sheets[existingIndex].id)
-        } else {
-          // Criar nova ficha com o mesmo nome
-          const newId = 't20_' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4)
-          const newSheet = {
-            id: newId,
-            meta: { nome: sheetName, nivel: totalLevel },
-            data: character,
-          }
-          sheets.push(newSheet)
-          localStorage.setItem('t20_sheets', JSON.stringify(sheets))
-          localStorage.setItem('t20_active_sheet_id', newId)
+        } catch (error) {
+          console.error('[v0] Error updating character:', error)
+          addToast('Erro ao atualizar personagem', 'error')
+          return
         }
       } else {
-        // Criar nova ficha
-        const newId = 't20_' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4)
-        const newSheet = {
-          id: newId,
-          meta: { nome: sheetName, nivel: totalLevel },
-          data: character,
+        // Criar novo personagem com o mesmo nome
+        try {
+          const res = await fetch('/api/character', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              campaignId: campaign.id,
+              characterData: charWithName,
+              setAsActive: true,
+            }),
+          })
+          
+          if (res.ok) {
+            const data = await res.json()
+            setCharacters(data.characters || [])
+            setActiveCharacterId(data.characterId)
+            setLoadedCharacter(charWithName)
+            setCharacterName(sheetName)
+            setLastSaved(new Date())
+          }
+        } catch (error) {
+          console.error('[v0] Error creating character:', error)
+          addToast('Erro ao criar personagem', 'error')
+          return
         }
-        sheets.push(newSheet)
-        localStorage.setItem('t20_sheets', JSON.stringify(sheets))
-        localStorage.setItem('t20_active_sheet_id', newId)
       }
-    } catch (err) {
-      console.error('Error saving to localStorage:', err)
-    }
-
-    setLoadedCharacter(character)
-
-    // Atualiza o nome do personagem
-    if (sheetName) {
-      setCharacterName(sheetName)
+    } else {
+      // Criar novo personagem
+      try {
+        const res = await fetch('/api/character', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            campaignId: campaign.id,
+            characterData: charWithName,
+            setAsActive: true,
+          }),
+        })
+        
+        if (res.ok) {
+          const data = await res.json()
+          setCharacters(data.characters || [])
+          setActiveCharacterId(data.characterId)
+          setLoadedCharacter(charWithName)
+          setCharacterName(sheetName)
+          setLastSaved(new Date())
+        }
+      } catch (error) {
+        console.error('[v0] Error creating character:', error)
+        addToast('Erro ao criar personagem', 'error')
+        return
+      }
     }
 
     // Mudar para a aba "Ficha Completa"
     setMainTab('ficha')
 
-    addToast(`Ficha "${sheetName}" carregada e salva com sucesso!`, 'success')
+    addToast(`Ficha "${sheetName}" importada e salva com sucesso!`, 'success')
   }
   
   const saveCharacterName = async () => {
@@ -1111,38 +1325,74 @@ export function PlayerPanel({
 
           {/* Tab Ficha Completa */}
           <TabsContent value="ficha" className="mt-0 h-[calc(100svh-8rem)]">
-            {loadedCharacter ? (
-              <div className="h-full rounded-xl border border-border/50 overflow-hidden bg-card/50">
-                <CharacterSheetView
-                  character={loadedCharacter}
-                  readOnly={false}
-                  onResourceChange={(resource, newValue) => {
-                    setResourceValue(resource, newValue)
-                  }}
-                  onRollSkill={(skillName, total) => {
-                    const mod = total
-                    const formula = createD20Formula(mod)
-                    performRoll(formula, 'pericia', skillName)
-                  }}
+            <div className="h-full flex flex-col">
+              {/* Header com seletor de personagem */}
+              <div className="flex items-center justify-between p-3 border-b border-border/50 bg-card/50 shrink-0">
+                <CharacterSelector
+                  characters={characters}
+                  activeCharacterId={activeCharacterId}
+                  onSelect={handleSelectCharacter}
+                  onCreate={handleCreateCharacter}
+                  onDelete={handleDeleteCharacter}
+                  isLoading={loadingCharacters}
                 />
-              </div>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center gap-4 text-center p-8">
-                <Sparkles className="w-16 h-16 text-muted-foreground/20" />
-                <div>
-                  <h3 className="text-lg font-semibold mb-1">Nenhuma ficha carregada</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Importe uma ficha usando o botão &quot;Importar Ficha&quot; no topo da página.
-                  </p>
-                </div>
                 <ImportSheetDialog onImport={handleImportSheet}>
-                  <Button variant="outline">
+                  <Button variant="outline" size="sm">
                     <Upload className="w-4 h-4 mr-2" />
                     Importar Ficha
                   </Button>
                 </ImportSheetDialog>
               </div>
-            )}
+
+              {/* Conteúdo da ficha */}
+              {loadingCharacters ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : loadedCharacter ? (
+                <div className="flex-1 rounded-b-xl border-x border-b border-border/50 overflow-hidden bg-card/50">
+                  <CharacterSheetFull
+                    character={loadedCharacter}
+                    readOnly={false}
+                    onChange={(updated) => {
+                      setLoadedCharacter(updated)
+                      if (updated.nome) {
+                        setCharacterName(updated.nome)
+                      }
+                    }}
+                    onSave={saveCharacterToAPI}
+                    onRollSkill={(skillName, total) => {
+                      const formula = createD20Formula(total)
+                      performRoll(formula, 'pericia', skillName)
+                    }}
+                    saving={savingCharacter}
+                    lastSaved={lastSaved}
+                  />
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
+                  <Sparkles className="w-16 h-16 text-muted-foreground/20" />
+                  <div>
+                    <h3 className="text-lg font-semibold mb-1">Nenhum personagem</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Crie um novo personagem ou importe uma ficha existente.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" onClick={() => handleCreateCharacter('Novo Personagem')}>
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Criar Personagem
+                    </Button>
+                    <ImportSheetDialog onImport={handleImportSheet}>
+                      <Button variant="outline">
+                        <Upload className="w-4 h-4 mr-2" />
+                        Importar Ficha
+                      </Button>
+                    </ImportSheetDialog>
+                  </div>
+                </div>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
       </main>
