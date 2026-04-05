@@ -131,7 +131,7 @@ export function PlayerPanel({
     'Vontade': { attr: 'sabedoria' },
   }
 
-  // Auto-load ficha do localStorage ao montar
+  // Auto-load ficha do localStorage ao montar; se vazio, usa ficha já salva na campanha (Supabase)
   useEffect(() => {
     try {
       const raw = localStorage.getItem('t20_sheets')
@@ -144,9 +144,17 @@ export function PlayerPanel({
           if (!characterName && activeSheet.data.nome) {
             setCharacterName(activeSheet.data.nome)
           }
+          return
         }
       }
     } catch { /* ignore */ }
+    const serverSheet = (membership as { character_data?: unknown }).character_data
+    if (serverSheet && typeof serverSheet === 'object') {
+      setLoadedCharacter(serverSheet as Record<string, unknown>)
+      if (!characterName && (serverSheet as { nome?: string }).nome) {
+        setCharacterName((serverSheet as { nome?: string }).nome!)
+      }
+    }
   }, [])
 
   // Calcula o modificador de uma perícia baseado na ficha carregada
@@ -506,17 +514,17 @@ export function PlayerPanel({
 
       {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/campanhas">
+        <div className="container mx-auto px-4 py-4 max-w-full overflow-x-hidden">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between min-w-0">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-w-0 flex-1">
+              <Link href="/campanhas" className="shrink-0">
                 <Button variant="ghost" size="sm">
                   <ArrowLeft className="w-4 h-4 mr-2" />
                   Voltar
                 </Button>
               </Link>
-              <div>
-                <h1 className="text-xl font-bold">{campaign.name}</h1>
+              <div className="min-w-0 flex-1">
+                <h1 className="text-xl font-bold truncate">{campaign.name}</h1>
                 <div className="flex items-center gap-2">
                   {editingName ? (
                     <div className="flex items-center gap-2">
@@ -562,28 +570,28 @@ export function PlayerPanel({
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 shrink-0 justify-end sm:justify-start">
               {/* Melhoria 3: Botão para importar ficha */}
               <ImportSheetDialog onImport={handleImportSheet}>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className="shrink-0">
                   <Upload className="w-4 h-4 mr-2" />
                   Importar Ficha
                 </Button>
               </ImportSheetDialog>
               
-              <Link href={`/campanhas/${campaign.id}/historico`}>
+              <Link href={`/campanhas/${campaign.id}/historico`} className="shrink-0">
                 <Button variant="ghost" size="sm">
                   <History className="w-4 h-4 mr-2" />
                   Histórico
                 </Button>
               </Link>
               {activeSession ? (
-                <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+                <Badge className="bg-green-500/20 text-green-400 border-green-500/30 shrink-0">
                   <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse mr-2" />
                   Sessao Ativa
                 </Badge>
               ) : (
-                <Badge variant="secondary">Sem sessao ativa</Badge>
+                <Badge variant="secondary" className="shrink-0">Sem sessao ativa</Badge>
               )}
             </div>
           </div>
@@ -1112,16 +1120,14 @@ export function PlayerPanel({
           {/* Tab Ficha Completa */}
           <TabsContent value="ficha" className="mt-0 h-[calc(100svh-8rem)]">
             {loadedCharacter ? (
-              <div className="h-full rounded-xl border border-border/50 overflow-hidden bg-card/50">
+              <div className="h-full rounded-xl border border-border/50 overflow-hidden bg-card/50 min-h-[480px]">
                 <CharacterSheetView
+                  key={membership.id}
                   character={loadedCharacter}
                   readOnly={false}
-                  onResourceChange={(resource, newValue) => {
-                    setResourceValue(resource, newValue)
-                  }}
+                  onCharacterChange={setLoadedCharacter}
                   onRollSkill={(skillName, total) => {
-                    const mod = total
-                    const formula = createD20Formula(mod)
+                    const formula = createD20Formula(total)
                     performRoll(formula, 'pericia', skillName)
                   }}
                 />

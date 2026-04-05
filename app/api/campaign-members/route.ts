@@ -64,9 +64,10 @@ export async function GET(request: NextRequest) {
 
   const admin = createAdminClient(supabaseUrl, serviceRoleKey)
 
-  const { data: members, error } = await admin
+  // Buscar membros sem join (FK não existe entre campaign_members e profiles)
+  const { data: membersRaw, error } = await admin
     .from('campaign_members')
-    .select('*, profiles(*)')
+    .select('*')
     .eq('campaign_id', campaignId)
 
   if (error) {
@@ -76,6 +77,25 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
+
+  // Buscar profiles separadamente
+  const userIds = (membersRaw || []).map((m: any) => m.user_id)
+  let profilesMap = new Map()
+  if (userIds.length > 0) {
+    const { data: profilesData } = await admin
+      .from('profiles')
+      .select('*')
+      .in('id', userIds)
+    profilesMap = new Map(
+      (profilesData || []).map((p: any) => [p.id, p])
+    )
+  }
+
+  // Mesclar membros com profiles
+  const members = (membersRaw || []).map((m: any) => ({
+    ...m,
+    profiles: profilesMap.get(m.user_id) || null,
+  }))
 
   // Remover dados sensíveis dos profiles e validar character_data
   const sanitizedMembers = (members || []).map((m: any) => {

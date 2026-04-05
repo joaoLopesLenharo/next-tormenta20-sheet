@@ -38,6 +38,7 @@ export default async function MasterPage({ params }: MasterPageProps) {
 
   // Buscar membros da campanha diretamente no servidor com a chave de serviço,
   // evitando chamadas HTTP internas que dependem de variáveis de ambiente de URL.
+  // NOTA: Não existe FK entre campaign_members e profiles, então buscamos separadamente.
   let members: any[] = []
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (serviceRoleKey && process.env.NEXT_PUBLIC_SUPABASE_URL) {
@@ -47,26 +48,59 @@ export default async function MasterPage({ params }: MasterPageProps) {
         process.env.NEXT_PUBLIC_SUPABASE_URL,
         serviceRoleKey
       )
+      // Buscar membros sem join (FK não existe entre campaign_members e profiles)
       const { data: membersData, error: membersError } = await admin
         .from('campaign_members')
-        .select('*, profiles(*)')
+        .select('*')
         .eq('campaign_id', id)
-      if (!membersError) {
-        members = membersData || []
-      } else {
+
+      if (!membersError && membersData && membersData.length > 0) {
+        // Buscar profiles separadamente pelos user_ids
+        const userIds = membersData.map((m: any) => m.user_id)
+        const { data: profilesData } = await admin
+          .from('profiles')
+          .select('*')
+          .in('id', userIds)
+
+        const profilesMap = new Map(
+          (profilesData || []).map((p: any) => [p.id, p])
+        )
+
+        // Mesclar membros com seus profiles
+        members = membersData.map((m: any) => ({
+          ...m,
+          profiles: profilesMap.get(m.user_id) || null,
+        }))
+      } else if (membersError) {
         console.error('[mestre/page] Error fetching members via admin:', membersError)
       }
     } catch (err) {
       console.error('[mestre/page] Error creating admin client:', err)
     }
   } else {
-    // Fallback: buscar via RLS (pode retornar apenas o próprio usuário dependendo das policies)
+    // Fallback: buscar via RLS separadamente
     try {
       const { data: membersData } = await supabase
         .from('campaign_members')
-        .select('*, profiles(*)')
+        .select('*')
         .eq('campaign_id', id)
-      members = membersData || []
+
+      if (membersData && membersData.length > 0) {
+        const userIds = membersData.map((m: any) => m.user_id)
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('id', userIds)
+
+        const profilesMap = new Map(
+          (profilesData || []).map((p: any) => [p.id, p])
+        )
+
+        members = membersData.map((m: any) => ({
+          ...m,
+          profiles: profilesMap.get(m.user_id) || null,
+        }))
+      }
     } catch (err) {
       console.error('[mestre/page] Fallback members fetch error:', err)
     }
@@ -78,12 +112,28 @@ export default async function MasterPage({ params }: MasterPageProps) {
   if (activeSession) {
     const { data: rolls } = await supabase
       .from('dice_rolls')
-      .select('*, profiles(*)')
+      .select('*')
       .eq('session_id', activeSession.id)
       .order('created_at', { ascending: false })
       .limit(100)
     
-    recentRolls = rolls || []
+    // Buscar profiles dos jogadores que fizeram rolagens
+    if (rolls && rolls.length > 0) {
+      const rollUserIds = [...new Set(rolls.map((r: any) => r.user_id))]
+      const { data: rollProfiles } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', rollUserIds)
+
+      const rollProfilesMap = new Map(
+        (rollProfiles || []).map((p: any) => [p.id, p])
+      )
+
+      recentRolls = rolls.map((r: any) => ({
+        ...r,
+        profiles: rollProfilesMap.get(r.user_id) || null,
+      }))
+    }
 
     // Buscar entradas de iniciativa
     const { data: initiative } = await supabase

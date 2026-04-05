@@ -49,11 +49,29 @@ export default async function PlayerPage({ params }: PlayerPageProps) {
     .eq('is_active', true)
     .single()
 
-  // Buscar membros da campanha (para iniciativa)
-  const { data: members } = await supabase
+  // Buscar membros da campanha (para iniciativa) - sem join profiles (FK não existe)
+  const { data: membersRaw } = await supabase
     .from('campaign_members')
-    .select('*, profiles(*)')
+    .select('*')
     .eq('campaign_id', id)
+
+  let members: any[] = []
+  if (membersRaw && membersRaw.length > 0) {
+    const memberUserIds = membersRaw.map((m: any) => m.user_id)
+    const { data: memberProfiles } = await supabase
+      .from('profiles')
+      .select('*')
+      .in('id', memberUserIds)
+
+    const memberProfilesMap = new Map(
+      (memberProfiles || []).map((p: any) => [p.id, p])
+    )
+
+    members = membersRaw.map((m: any) => ({
+      ...m,
+      profiles: memberProfilesMap.get(m.user_id) || null,
+    }))
+  }
 
   // Buscar rolagens do jogador na sessao ativa
   let myRolls: unknown[] = []

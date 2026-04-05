@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useCallback, useMemo } from 'react'
-import { CharacterSheetView } from './character-sheet-view'
+import React, { useCallback, useEffect, useMemo, useRef } from 'react'
+import { FullCharacterSheet } from '@/components/character/full-character-sheet'
 import { validateAndRepairCharacterData, type CharacterData } from '@/lib/schemas/character'
 import { Card } from '@/components/ui/card'
 import { AlertCircle } from 'lucide-react'
@@ -10,16 +10,17 @@ interface CharacterSheetPanelProps {
   character: any | null
   onUpdateCharacter?: (updates: Partial<CharacterData>) => void
   readOnly?: boolean
+  persistLocalSheets?: boolean
 }
 
 /**
- * Wrapper que integra validação e reparo de dados com o CharacterSheetView
- * Valida dados do localStorage e do Supabase antes de renderizar
+ * Wrapper que integra validação e reparo de dados com o FullCharacterSheet.
  */
 export function CharacterSheetPanel({
   character,
   onUpdateCharacter,
   readOnly = false,
+  persistLocalSheets = true,
 }: CharacterSheetPanelProps) {
   // Default character structure para fallback
   const defaultCharacter: CharacterData = useMemo(() => ({
@@ -27,8 +28,13 @@ export function CharacterSheetPanel({
     nivel: 1,
     raca: '',
     classes: [],
+    divindade: '',
+    tendencia: '',
+    deslocamento: 9,
     origem: '',
     foto: '',
+    defenseAttributes: ['destreza'],
+    spellDCAttributes: ['inteligencia'],
     atributos: {
       forca: 10,
       destreza: 10,
@@ -41,9 +47,11 @@ export function CharacterSheetPanel({
       vida: { atual: 0, maximo: 0, cor: '#ef4444' },
       mana: { atual: 0, maximo: 0, cor: '#3b82f6' },
       prana: { atual: 0, maximo: 0, cor: '#eab308' },
+      recursos_extras: [],
     },
     defesa: 10,
     defesa_outros: 0,
+    spellDC_outros: 0,
     pericias: {},
     inventario: {
       armas: [],
@@ -57,6 +65,7 @@ export function CharacterSheetPanel({
     },
     habilidades: [],
     poderes: [],
+    oficiosPersonalizados: [],
   }), [])
 
   // Valida e repara os dados do personagem
@@ -75,23 +84,32 @@ export function CharacterSheetPanel({
     }
   }, [character, defaultCharacter])
 
-  const handleUpdate = useCallback(
-    (updates: Partial<CharacterData>) => {
-      if (onUpdateCharacter) {
-        // Valida antes de chamar o callback
+  const saveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleSheetChange = useCallback(
+    (next: CharacterData) => {
+      if (!onUpdateCharacter) return
+      if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current)
+      saveDebounceRef.current = setTimeout(() => {
+        saveDebounceRef.current = null
         try {
-          const merged = { ...validatedCharacter, ...updates }
-          const validated = validateAndRepairCharacterData(merged, defaultCharacter)
+          const validated = validateAndRepairCharacterData(next, defaultCharacter)
           onUpdateCharacter(validated)
         } catch (error) {
           console.error('[v0] Failed to update character:', error)
         }
-      }
+      }, 450)
     },
-    [validatedCharacter, onUpdateCharacter, defaultCharacter]
+    [onUpdateCharacter, defaultCharacter]
   )
 
-  if (!validatedCharacter.nome) {
+  useEffect(() => {
+    return () => {
+      if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current)
+    }
+  }, [])
+
+  if (character == null) {
     return (
       <Card className="p-8 flex items-center gap-4 bg-yellow-900/20 border-yellow-600/40">
         <AlertCircle className="w-6 h-6 text-yellow-600" />
@@ -106,12 +124,15 @@ export function CharacterSheetPanel({
   }
 
   return (
-    <CharacterSheetView
-      character={validatedCharacter}
-      onUpdate={handleUpdate}
-      readOnly={readOnly}
-      showActions={!readOnly}
-    />
+    <div className="w-full h-full relative">
+      <FullCharacterSheet
+        initialCharacter={validatedCharacter as any}
+        readOnly={readOnly}
+        hideSidebar={true}
+        persistLocalSheets={persistLocalSheets}
+        onCharacterChange={onUpdateCharacter ? (handleSheetChange as any) : undefined}
+      />
+    </div>
   )
 }
 

@@ -179,6 +179,62 @@ export function MasterPanel({
     setRolls([])
   }
 
+  // NPCs Locais
+  const [localNpcs, setLocalNpcs] = useState<any[]>([])
+
+  useEffect(() => {
+    // Carregar npcs locais do mestre para esta campanha
+    const loadNpcs = () => {
+      try {
+        const storedSheetsStr = localStorage.getItem('t20_sheets')
+        if (!storedSheetsStr) return
+
+        const storedSheets = JSON.parse(storedSheetsStr)
+        const campaignNpcsStr = localStorage.getItem(`t20_campaign_npcs_${campaign.id}`)
+        const npcIds = campaignNpcsStr ? JSON.parse(campaignNpcsStr) : []
+
+        const npcs = storedSheets.filter((s: any) => npcIds.includes(s.id))
+        setLocalNpcs(npcs)
+      } catch (e) {
+        console.error('Failed to load local NPCs', e)
+      }
+    }
+    loadNpcs()
+  }, [campaign.id])
+
+  const linkLocalSheetAsNpc = (sheetId: string) => {
+    try {
+      const campaignNpcsStr = localStorage.getItem(`t20_campaign_npcs_${campaign.id}`)
+      const npcIds = campaignNpcsStr ? JSON.parse(campaignNpcsStr) : []
+      if (!npcIds.includes(sheetId)) {
+        const newIds = [...npcIds, sheetId]
+        localStorage.setItem(`t20_campaign_npcs_${campaign.id}`, JSON.stringify(newIds))
+        
+        // Atualiza estado local lendo do t20_sheets
+        const storedSheetsStr = localStorage.getItem('t20_sheets')
+        if (storedSheetsStr) {
+          const storedSheets = JSON.parse(storedSheetsStr)
+          const npcs = storedSheets.filter((s: any) => newIds.includes(s.id))
+          setLocalNpcs(npcs)
+        }
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const removeLocalNpc = (sheetId: string) => {
+    try {
+      const campaignNpcsStr = localStorage.getItem(`t20_campaign_npcs_${campaign.id}`)
+      let npcIds = campaignNpcsStr ? JSON.parse(campaignNpcsStr) : []
+      npcIds = npcIds.filter((id: string) => id !== sheetId)
+      localStorage.setItem(`t20_campaign_npcs_${campaign.id}`, JSON.stringify(npcIds))
+      setLocalNpcs(prev => prev.filter(n => n.id !== sheetId))
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
   return (
     <div className="min-h-svh bg-gradient-to-b from-background to-muted/30">
       {/* Header */}
@@ -458,6 +514,11 @@ export function MasterPanel({
               member={selectedMemberSheet}
               isOpen={!!selectedMemberSheet}
               onClose={() => setSelectedMemberSheet(null)}
+              onCharacterSaved={(data) => {
+                setSelectedMemberSheet((prev: any) =>
+                  prev ? { ...prev, character_data: data } : null
+                )
+              }}
             />
 
             {/* Rolagem do Mestre */}

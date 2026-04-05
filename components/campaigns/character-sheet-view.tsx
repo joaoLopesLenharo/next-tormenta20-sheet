@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import type React from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
   Swords,
@@ -13,47 +13,54 @@ import {
   Package,
   FileText,
   Search,
-  Heart,
-  Zap,
-  Droplets,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  ChevronDown,
   Dices,
-  Minus,
-  Plus,
+  ScrollText,
 } from 'lucide-react'
-
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { CharacterSheetPanel } from '@/components/character/character-sheet-panel'
 // ---------------------------------------------------------------------------
 // Tipos e helpers
 // ---------------------------------------------------------------------------
 
-interface CharacterData {
+/** Estado da ficha na visualização CRIS (compatível com JSON importado / Supabase) */
+export interface CampaignSheetData {
   nome?: string
   raca?: string
   origem?: string
   divindade?: string
+  tendencia?: string
   nivel?: number
   classes?: Array<{ nome: string; nivel: number }>
   atributos?: Record<string, number>
-  pericias?: Record<string, { treinada?: boolean | string; atributo?: string; outros?: number; bonusExtra?: number }>
+  pericias?: Record<string, { treinada?: boolean | string; atributo?: string; outros?: number; bonusExtra?: number | string; desconto?: string }>
   recursos?: {
-    vida?: { atual: number; maximo: number }
-    mana?: { atual: number; maximo: number }
-    prana?: { atual: number; maximo: number }
+    vida?: { atual: number; maximo: number; cor?: string }
+    mana?: { atual: number; maximo: number; cor?: string }
+    prana?: { atual: number; maximo: number; cor?: string }
+    recursos_extras?: Array<{ nome: string; atual: number; maximo: number; cor?: string }>
   }
   inventario?: {
-    armas?: Array<{ nome: string; dano?: string; critico?: string; alcance?: string; tipo?: string; equipada?: boolean; bonus_ataque?: number }>
-    armaduras?: Array<{ nome: string; ca?: number; categoria?: string; equipada?: boolean }>
-    itens?: Array<{ nome: string; qtd?: number; peso?: number; descricao?: string }>
+    armas?: Array<{ nome: string; dano?: string; critico?: string; alcance?: string; tipo?: string; equipada?: boolean; bonus_ataque?: number; peso?: number }>
+    armaduras?: Array<{ nome: string; ca?: number; categoria?: string; equipada?: boolean; penalidade?: number; peso?: number }>
+    itens?: Array<{ nome: string; quantidade?: number; qtd?: number; peso?: number; descricao?: string; equipada?: boolean }>
+    dinheiro?: Record<string, number>
   }
   poderes?: Array<{ nome: string; descricao?: string; tipo?: string }>
-  magias?: Array<{ nome: string; nivel?: number; escola?: string; descricao?: string }>
+  habilidades?: Array<{ nome: string; descricao?: string; tipo?: string }>
+  magias?: Record<string, Record<string, Array<{ nome: string; escola?: string; execucao?: string; alcance?: string; duracao?: string; descricao?: string }>>>
   defenseAttributes?: string[]
   defenseAttribute?: string
   defesa_outros?: number
   deslocamento?: number
+  foto?: string | { src: string; srcOriginal?: string; zoom: number; offsetX: number; offsetY: number }
+  spellDCAttributes?: string[]
+  spellDC_outros?: number
+  oficiosPersonalizados?: Array<{ id: string; nome: string; atributo: string; treinada: boolean; outros: number }>
   [key: string]: unknown
 }
 
@@ -64,6 +71,15 @@ const ATTR_LABELS: Record<string, string> = {
   inteligencia: 'INT',
   sabedoria: 'SAB',
   carisma: 'CAR',
+}
+
+const ATTR_FULL_LABELS: Record<string, string> = {
+  forca: 'Força',
+  destreza: 'Destreza',
+  constituicao: 'Constituição',
+  inteligencia: 'Inteligência',
+  sabedoria: 'Sabedoria',
+  carisma: 'Carisma',
 }
 
 const SKILLS_BY_ATTR: Record<string, string[]> = {
@@ -83,7 +99,7 @@ function formatMod(mod: number) {
   return mod >= 0 ? `+${mod}` : `${mod}`
 }
 
-function calcDefense(char: CharacterData) {
+function calcDefense(char: CampaignSheetData) {
   const base = 10
   const selectedAttrs = char.defenseAttributes ?? (char.defenseAttribute ? [char.defenseAttribute] : ['destreza'])
   const attrMod = selectedAttrs.reduce(
@@ -95,11 +111,57 @@ function calcDefense(char: CharacterData) {
   return base + attrMod + (equippedArmor?.ca ?? 0) + (equippedShield?.ca ?? 0) + (char.defesa_outros ?? 0)
 }
 
-function calcTotalLevel(char: CharacterData) {
+function calcSpellDC(char: CampaignSheetData) {
+  const baseDC = 10
+  const totalLevel = calcTotalLevel(char)
+  const halfLevel = Math.floor(totalLevel / 2)
+  const selectedAttrs = char.spellDCAttributes || ['inteligencia']
+  const attrMod = selectedAttrs.reduce(
+    (sum, attr) => sum + getAttrMod(char.atributos?.[attr] ?? 10),
+    0
+  )
+  const itemsBonus = (char.inventario?.itens || [])
+    .filter((item: any) => item.equipada)
+    .reduce((sum, item: any) => sum + (item.bonus_cd || 0), 0)
+  const outrosBonus = char.spellDC_outros || 0
+  return baseDC + halfLevel + attrMod + itemsBonus + outrosBonus
+}
+
+function calcTotalLevel(char: CampaignSheetData) {
   return (char.classes ?? []).reduce((acc, c) => acc + (parseInt(String(c.nivel)) || 0), 0) || char.nivel || 1
 }
 
-function calcSkillTotal(char: CharacterData, skillName: string): number {
+/** Mescla atualização parcial mantendo aninhamentos usados na edição */
+function mergeCharacterData(base: CampaignSheetData, patch: Partial<CampaignSheetData>): CampaignSheetData {
+  const next = { ...base, ...patch } as CampaignSheetData
+  if (patch.atributos && base.atributos) {
+    next.atributos = { ...base.atributos, ...patch.atributos }
+  }
+  if (patch.recursos && base.recursos) {
+    const r = base.recursos
+    const p = patch.recursos
+    next.recursos = {
+      ...r,
+      ...p,
+      vida: p.vida ? { ...r.vida, ...p.vida } : r.vida,
+      mana: p.mana ? { ...r.mana, ...p.mana } : r.mana,
+      prana: p.prana ? { ...r.prana, ...p.prana } : r.prana,
+    }
+  }
+  if (patch.pericias) {
+    const baseP = base.pericias ?? {}
+    next.pericias = { ...baseP }
+    for (const key of Object.keys(patch.pericias)) {
+      const sub = patch.pericias[key]
+      if (sub && typeof sub === 'object') {
+        next.pericias[key] = { ...(baseP[key] as object), ...sub } as NonNullable<CampaignSheetData['pericias']>[string]
+      }
+    }
+  }
+  return next
+}
+
+function calcSkillTotal(char: CampaignSheetData, skillName: string): number {
   const attrKey = Object.entries(SKILLS_BY_ATTR).find(([, skills]) => skills.includes(skillName))?.[0] ?? 'forca'
   const skill = char.pericias?.[skillName] ?? {}
   const selectedAttr = (skill.atributo ?? attrKey).toLowerCase()
@@ -122,6 +184,56 @@ function calcSkillTotal(char: CharacterData, skillName: string): number {
   return halfLevel + attrMod + trainingBonus + outros + bonusExtra
 }
 
+/** Flatten nested magias object into a display-friendly list */
+function flattenMagias(magias: CampaignSheetData['magias']): Array<{ nome: string; escola?: string; execucao?: string; alcance?: string; duracao?: string; descricao?: string; tipo: string; circulo: string }> {
+  if (!magias) return []
+  
+  // If magias is already an array (legacy format), return as-is with defaults
+  if (Array.isArray(magias)) {
+    return (magias as any[]).map((m: any) => ({
+      ...m,
+      tipo: m.tipo || 'arcana',
+      circulo: m.nivel ? `${m.nivel}º` : '1º',
+    }))
+  }
+
+  const result: Array<{ nome: string; escola?: string; execucao?: string; alcance?: string; duracao?: string; descricao?: string; tipo: string; circulo: string }> = []
+  
+  for (const [tipo, circulos] of Object.entries(magias)) {
+    if (!circulos || typeof circulos !== 'object') continue
+    for (const [circulo, spells] of Object.entries(circulos)) {
+      if (!Array.isArray(spells)) continue
+      for (const spell of spells) {
+        if (spell && spell.nome) {
+          result.push({
+            ...spell,
+            tipo,
+            circulo,
+          })
+        }
+      }
+    }
+  }
+
+  return result
+}
+
+/** Get character photo URL */
+function getPhotoUrl(foto: CampaignSheetData['foto']): string | null {
+  if (!foto) return null
+  if (typeof foto === 'string') return foto || null
+  return foto.src || null
+}
+
+/** Get photo style with zoom/offset */
+function getPhotoStyle(foto: CampaignSheetData['foto']): React.CSSProperties {
+  if (!foto || typeof foto === 'string') return {}
+  return {
+    transform: `scale(${foto.zoom || 1})`,
+    transformOrigin: `${50 + (foto.offsetX || 0)}% ${50 + (foto.offsetY || 0)}%`,
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Sub-componentes
 // ---------------------------------------------------------------------------
@@ -132,11 +244,15 @@ function AttrCircle({
   abbr,
   value,
   size = 'md',
+  editable = false,
+  onValueChange,
 }: {
   label: string
   abbr: string
   value: number
   size?: 'sm' | 'md' | 'lg'
+  editable?: boolean
+  onValueChange?: (v: number) => void
 }) {
   const mod = getAttrMod(value)
   const sizeClasses = {
@@ -147,6 +263,8 @@ function AttrCircle({
   const valueClasses = { sm: 'text-lg', md: 'text-xl', lg: 'text-2xl' }
   const modClasses = { sm: 'text-[9px]', md: 'text-[10px]', lg: 'text-xs' }
 
+  const clampAttr = (n: number) => Math.min(30, Math.max(1, n))
+
   return (
     <div className="flex flex-col items-center gap-0.5">
       <div
@@ -154,7 +272,19 @@ function AttrCircle({
       >
         {/* Anel decorativo externo */}
         <div className="absolute inset-0 rounded-full border border-primary/10" />
-        <span className={`${valueClasses[size]} font-bold leading-none`}>{value}</span>
+        {editable && onValueChange ? (
+          <input
+            type="number"
+            min={1}
+            max={30}
+            aria-label={`Valor de ${abbr}`}
+            className={`${valueClasses[size]} font-bold leading-none w-full text-center bg-transparent border-none outline-none p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
+            value={value}
+            onChange={(e) => onValueChange(clampAttr(parseInt(e.target.value, 10) || 10))}
+          />
+        ) : (
+          <span className={`${valueClasses[size]} font-bold leading-none`}>{value}</span>
+        )}
         <span className={`${modClasses[size]} font-mono text-primary`}>{formatMod(mod)}</span>
       </div>
       <div className="text-center">
@@ -181,7 +311,8 @@ function ResourceBar({
   label: string
   atual: number
   maximo: number
-  color: 'red' | 'blue' | 'orange'
+  color: 'red' | 'blue' | 'orange' | 'custom'
+  customColor?: string
   onDecrement: () => void
   onIncrement: () => void
   onFullDecrement: () => void
@@ -219,70 +350,86 @@ function ResourceBar({
       label: 'text-orange-300',
       btn: 'bg-orange-500/20 hover:bg-orange-500/40 text-orange-300',
     },
+    custom: {
+      bar: 'bg-purple-500',
+      track: 'bg-purple-950/60',
+      border: 'border-purple-500/30',
+      bg: 'bg-purple-500/5',
+      text: 'text-purple-400',
+      label: 'text-purple-300',
+      btn: 'bg-purple-500/20 hover:bg-purple-500/40 text-purple-300',
+    },
   }
 
   const c = colorMap[color]
 
   return (
-    <div className={`rounded-lg border ${c.border} ${c.bg} p-2`}>
-      <div className="flex items-center justify-between mb-1">
-        <span className={`text-[10px] font-bold uppercase tracking-widest ${c.label}`}>{label}</span>
-        <span className={`text-[10px] font-mono ${c.text}`}>
+    <div className={`rounded-lg border ${c.border} ${c.bg} p-1.5 min-w-0 max-w-full overflow-hidden`}>
+      <div className="flex items-center justify-between gap-1 mb-1 min-w-0">
+        <span className={`text-[10px] font-bold uppercase tracking-widest truncate ${c.label}`}>{label}</span>
+        <span className={`text-[10px] font-mono shrink-0 ${c.text}`}>
           {atual} / {maximo}
         </span>
       </div>
 
       {/* Barra */}
-      <div className={`h-3 rounded-full ${c.track} overflow-hidden mb-2 relative`}>
+      <div className={`h-2.5 rounded-full ${c.track} overflow-hidden mb-1.5 relative`}>
         <div
           className={`h-full rounded-full transition-all duration-300 ${c.bar}`}
           style={{ width: `${pct}%` }}
         />
-        {/* Grade visual */}
-        <div className="absolute inset-0 flex">
+        <div className="absolute inset-0 flex pointer-events-none">
           {Array.from({ length: 10 }).map((_, i) => (
             <div key={i} className="flex-1 border-r border-black/20 last:border-r-0" />
           ))}
         </div>
       </div>
 
-      {/* Controles */}
-      <div className="flex items-center gap-1">
-        <button
-          aria-label={`Zerar ${label}`}
-          className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-colors ${c.btn}`}
-          onClick={onFullDecrement}
-        >
-          <ChevronsLeft className="w-3 h-3" />
-        </button>
-        <button
-          aria-label={`Decrementar ${label}`}
-          className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-colors ${c.btn}`}
-          onClick={onDecrement}
-        >
-          <ChevronLeft className="w-3 h-3" />
-        </button>
-        <input
-          type="number"
-          aria-label={`Valor atual de ${label}`}
-          className={`flex-1 h-6 text-center text-sm font-bold bg-transparent border-none outline-none ${c.text} [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
-          value={atual}
-          onChange={(e) => onSetValue(parseInt(e.target.value) || 0)}
-        />
-        <button
-          aria-label={`Incrementar ${label}`}
-          className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-colors ${c.btn}`}
-          onClick={onIncrement}
-        >
-          <ChevronRight className="w-3 h-3" />
-        </button>
-        <button
-          aria-label={`Maximizar ${label}`}
-          className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold transition-colors ${c.btn}`}
-          onClick={onFullIncrement}
-        >
-          <ChevronsRight className="w-3 h-3" />
-        </button>
+      {/* Controles em coluna estreita: duas linhas para não estourar a largura */}
+      <div className="flex flex-col gap-1 min-w-0">
+        <div className="flex items-center justify-center gap-0.5 min-w-0">
+          <button
+            type="button"
+            aria-label={`Decrementar ${label}`}
+            className={`w-7 h-6 shrink-0 rounded flex items-center justify-center text-xs font-bold transition-colors ${c.btn}`}
+            onClick={onDecrement}
+          >
+            <ChevronLeft className="w-3 h-3" />
+          </button>
+          <input
+            type="number"
+            aria-label={`Valor atual de ${label}`}
+            className={`min-w-0 w-full max-w-[3.25rem] h-6 text-center text-xs font-bold bg-transparent border border-border/40 rounded px-0.5 outline-none ${c.text} [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
+            value={atual}
+            onChange={(e) => onSetValue(parseInt(e.target.value, 10) || 0)}
+          />
+          <button
+            type="button"
+            aria-label={`Incrementar ${label}`}
+            className={`w-7 h-6 shrink-0 rounded flex items-center justify-center text-xs font-bold transition-colors ${c.btn}`}
+            onClick={onIncrement}
+          >
+            <ChevronRight className="w-3 h-3" />
+          </button>
+        </div>
+        <div className="flex items-center justify-between gap-1 px-0.5">
+          <button
+            type="button"
+            aria-label={`Zerar ${label}`}
+            className={`flex-1 h-6 rounded flex items-center justify-center transition-colors ${c.btn}`}
+            onClick={onFullDecrement}
+          >
+            <ChevronsLeft className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            aria-label={`Maximizar ${label}`}
+            className={`flex-1 h-6 rounded flex items-center justify-center transition-colors ${c.btn}`}
+            onClick={onFullIncrement}
+          >
+            <ChevronsRight className="w-3 h-3" />
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -299,6 +446,9 @@ function SkillRow({
   outros,
   onRoll,
   highlight,
+  editable = false,
+  onToggleTrained,
+  onOutrosChange,
 }: {
   name: string
   total: number
@@ -309,6 +459,9 @@ function SkillRow({
   outros: number
   onRoll?: (name: string, total: number) => void
   highlight?: boolean
+  editable?: boolean
+  onToggleTrained?: () => void
+  onOutrosChange?: (v: number) => void
 }) {
   return (
     <div
@@ -334,12 +487,33 @@ function SkillRow({
       <span className={`w-8 text-right font-mono text-[10px] ${trainingBonus > 0 ? 'text-primary/80' : 'text-muted-foreground/40'}`}>
         {trainingBonus > 0 ? `+${trainingBonus}` : '—'}
       </span>
-      <span className={`w-8 text-right font-mono text-[10px] ${outros !== 0 ? 'text-yellow-400/80' : 'text-muted-foreground/40'}`}>
-        {outros !== 0 ? (outros > 0 ? `+${outros}` : outros) : '—'}
-      </span>
+      {editable && onOutrosChange ? (
+        <input
+          type="number"
+          aria-label={`Outros ${name}`}
+          className="w-9 h-6 text-right font-mono text-[10px] rounded border border-border/60 bg-background px-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          value={outros}
+          onChange={(e) => onOutrosChange(parseInt(e.target.value, 10) || 0)}
+        />
+      ) : (
+        <span className={`w-8 text-right font-mono text-[10px] ${outros !== 0 ? 'text-yellow-400/80' : 'text-muted-foreground/40'}`}>
+          {outros !== 0 ? (outros > 0 ? `+${outros}` : outros) : '—'}
+        </span>
+      )}
       <span className={`w-10 text-right font-bold font-mono ${total >= 10 ? 'text-foreground' : 'text-muted-foreground'}`}>
         {formatMod(total)}
       </span>
+      {editable && onToggleTrained && (
+        <label className="flex items-center gap-0.5 shrink-0 text-[9px] text-muted-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={trained}
+            onChange={() => onToggleTrained()}
+            className="rounded border-border h-3 w-3"
+          />
+          T
+        </label>
+      )}
     </div>
   )
 }
@@ -349,28 +523,48 @@ function SkillRow({
 // ---------------------------------------------------------------------------
 
 interface CharacterSheetViewProps {
-  character: CharacterData
+  character: CampaignSheetData
   /** Se verdadeiro, os recursos são somente leitura (ex: visualização do mestre) */
   readOnly?: boolean
+  /** Quando definido com readOnly false, atributos, perícias e ajustes passam a ser editáveis e o estado sobe para o pai */
+  onCharacterChange?: (next: CampaignSheetData) => void
   onResourceChange?: (resource: 'vida' | 'mana' | 'prana', newValue: number) => void
   onRollSkill?: (skillName: string, total: number) => void
+  /**
+   * Seção recolhível com o editor completo (mesmo da página inicial), sem alterar o layout principal da ficha de campanha.
+   */
+  complementFullEditor?: boolean
 }
 
 export function CharacterSheetView({
   character,
   readOnly = false,
+  onCharacterChange,
   onResourceChange,
   onRollSkill,
+  complementFullEditor = true,
 }: CharacterSheetViewProps) {
   const [skillFilter, setSkillFilter] = useState('')
   const [activeTab, setActiveTab] = useState('combate')
+  const [spellFilter, setSpellFilter] = useState('')
 
   const char = character
+
+  const canEditSheet = !readOnly && !!onCharacterChange
+
+  const patchCharacter = useCallback(
+    (patch: Partial<CampaignSheetData>) => {
+      if (!canEditSheet || !onCharacterChange) return
+      onCharacterChange(mergeCharacterData(char, patch))
+    },
+    [canEditSheet, char, onCharacterChange]
+  )
 
   // --- Cálculos derivados ---
   const totalLevel = useMemo(() => calcTotalLevel(char), [char])
   const halfLevel = useMemo(() => Math.floor(totalLevel / 2), [totalLevel])
   const defense = useMemo(() => calcDefense(char), [char])
+  const spellDC = useMemo(() => calcSpellDC(char), [char])
   const allSkillNames = useMemo(
     () => Object.values(SKILLS_BY_ATTR).flat().sort(),
     []
@@ -383,35 +577,104 @@ export function CharacterSheetView({
     [allSkillNames, skillFilter]
   )
 
+  // Flatten magias from nested format
+  const allSpells = useMemo(() => flattenMagias(char.magias), [char.magias])
+  const filteredSpells = useMemo(
+    () => allSpells.filter((s) => s.nome.toLowerCase().includes(spellFilter.toLowerCase())),
+    [allSpells, spellFilter]
+  )
+
+  // Group spells by type then circle for display
+  const spellsByType = useMemo(() => {
+    const grouped: Record<string, Record<string, typeof allSpells>> = {}
+    for (const spell of filteredSpells) {
+      if (!grouped[spell.tipo]) grouped[spell.tipo] = {}
+      if (!grouped[spell.tipo][spell.circulo]) grouped[spell.tipo][spell.circulo] = []
+      grouped[spell.tipo][spell.circulo].push(spell)
+    }
+    return grouped
+  }, [filteredSpells])
+
+  // Combine poderes + habilidades
+  const allPowers = useMemo(() => {
+    const poderes = (char.poderes || []).map((p) => ({ ...p, categoria: 'Poder' }))
+    const habilidades = (char.habilidades || []).map((h) => ({ ...h, categoria: 'Habilidade' }))
+    return [...habilidades, ...poderes]
+  }, [char.poderes, char.habilidades])
+
   // Recursos com fallback
   const vida = char.recursos?.vida ?? { atual: 0, maximo: 0 }
   const mana = char.recursos?.mana ?? { atual: 0, maximo: 0 }
   const prana = char.recursos?.prana ?? { atual: 0, maximo: 0 }
 
+  // Photo
+  const photoUrl = getPhotoUrl(char.foto)
+  const photoStyle = getPhotoStyle(char.foto)
+
   const handleResource = (resource: 'vida' | 'mana' | 'prana', delta: number) => {
-    if (readOnly || !onResourceChange) return
+    if (readOnly) return
     const cur = char.recursos?.[resource]?.atual ?? 0
     const max = char.recursos?.[resource]?.maximo ?? 0
     const next = Math.max(0, Math.min(max, cur + delta))
-    onResourceChange(resource, next)
+    if (canEditSheet) {
+      const baseR = char.recursos ?? {}
+      const slot = baseR[resource] ?? { atual: 0, maximo: 0 }
+      patchCharacter({
+        recursos: {
+          ...baseR,
+          [resource]: { ...slot, atual: next },
+        },
+      })
+    } else {
+      onResourceChange?.(resource, next)
+    }
   }
 
   const handleResourceSet = (resource: 'vida' | 'mana' | 'prana', value: number) => {
-    if (readOnly || !onResourceChange) return
+    if (readOnly) return
     const max = char.recursos?.[resource]?.maximo ?? 0
-    onResourceChange(resource, Math.max(0, Math.min(max, value)))
+    const clamped = Math.max(0, Math.min(max, value))
+    if (canEditSheet) {
+      const baseR = char.recursos ?? {}
+      const slot = baseR[resource] ?? { atual: 0, maximo: 0 }
+      patchCharacter({
+        recursos: {
+          ...baseR,
+          [resource]: { ...slot, atual: clamped },
+        },
+      })
+    } else {
+      onResourceChange?.(resource, clamped)
+    }
   }
 
   const handleResourceMax = (resource: 'vida' | 'mana' | 'prana') => {
-    if (readOnly || !onResourceChange) return
+    if (readOnly) return
     const max = char.recursos?.[resource]?.maximo ?? 0
-    onResourceChange(resource, max)
+    if (canEditSheet) {
+      const baseR = char.recursos ?? {}
+      const slot = baseR[resource] ?? { atual: 0, maximo: 0 }
+      patchCharacter({
+        recursos: {
+          ...baseR,
+          [resource]: { ...slot, atual: max },
+        },
+      })
+    } else {
+      onResourceChange?.(resource, max)
+    }
   }
 
   // Armas equipadas para o painel de combate
   const weapons = char.inventario?.armas ?? []
   const equippedWeapons = weapons.filter((w) => w.equipada)
   const allWeapons = equippedWeapons.length > 0 ? equippedWeapons : weapons
+
+  // tipo labels
+  const typeLabels: Record<string, string> = {
+    arcana: 'Arcana',
+    divina: 'Divina',
+  }
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-background text-foreground">
@@ -420,10 +683,19 @@ export function CharacterSheetView({
       {/* ------------------------------------------------------------------ */}
       <div className="flex items-start gap-3 p-3 border-b border-border/50 shrink-0">
         {/* Avatar */}
-        <div className="w-12 h-12 rounded-lg border-2 border-primary/30 bg-muted flex items-center justify-center shrink-0">
-          <span className="text-xl font-bold text-primary">
-            {(char.nome || 'P')[0].toUpperCase()}
-          </span>
+        <div className="w-12 h-12 rounded-lg border-2 border-primary/30 bg-muted flex items-center justify-center shrink-0 overflow-hidden">
+          {photoUrl ? (
+            <img
+              src={photoUrl}
+              alt={char.nome || 'Personagem'}
+              className="w-full h-full object-cover"
+              style={photoStyle}
+            />
+          ) : (
+            <span className="text-xl font-bold text-primary">
+              {(char.nome || 'P')[0].toUpperCase()}
+            </span>
+          )}
         </div>
         {/* Info */}
         <div className="flex-1 min-w-0">
@@ -438,18 +710,60 @@ export function CharacterSheetView({
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
             {char.raca && <span>{char.raca}</span>}
             {char.origem && <span>• {char.origem}</span>}
+            {char.divindade && <span>• {char.divindade}</span>}
             {totalLevel > 0 && <span>• Nível {totalLevel}</span>}
           </div>
         </div>
         {/* Stats rápidos */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="text-center">
+        <div className="flex items-start gap-3 shrink-0">
+          <div className="text-center min-w-[3rem]">
             <p className="text-[9px] text-muted-foreground uppercase tracking-widest">Defesa</p>
             <p className="text-lg font-bold leading-none">{defense}</p>
+            {canEditSheet && (
+              <Input
+                type="number"
+                title="Bônus extra de defesa"
+                className="h-6 mt-0.5 text-[10px] px-1 text-center"
+                value={char.defesa_outros ?? 0}
+                onChange={(e) =>
+                  patchCharacter({ defesa_outros: parseInt(e.target.value, 10) || 0 })
+                }
+              />
+            )}
           </div>
-          <div className="text-center">
+          <div className="text-center min-w-[3rem]">
+            <p className="text-[9px] text-muted-foreground uppercase tracking-widest">CD</p>
+            <p className="text-lg font-bold leading-none text-purple-400">{spellDC}</p>
+            {canEditSheet && (
+              <Input
+                type="number"
+                title="Bônus extra na CD de magias"
+                className="h-6 mt-0.5 text-[10px] px-1 text-center"
+                value={char.spellDC_outros ?? 0}
+                onChange={(e) =>
+                  patchCharacter({ spellDC_outros: parseInt(e.target.value, 10) || 0 })
+                }
+              />
+            )}
+          </div>
+          <div className="text-center min-w-[3.25rem]">
             <p className="text-[9px] text-muted-foreground uppercase tracking-widest">Desl.</p>
-            <p className="text-lg font-bold leading-none">{char.deslocamento ?? 9}m</p>
+            {canEditSheet ? (
+              <div className="flex items-center justify-center gap-0.5 mt-0.5">
+                <Input
+                  type="number"
+                  min={0}
+                  className="h-7 w-11 text-sm font-bold text-center px-0.5"
+                  value={char.deslocamento ?? 9}
+                  onChange={(e) =>
+                    patchCharacter({ deslocamento: Math.max(0, parseInt(e.target.value, 10) || 0) })
+                  }
+                />
+                <span className="text-xs text-muted-foreground">m</span>
+              </div>
+            ) : (
+              <p className="text-lg font-bold leading-none">{char.deslocamento ?? 9}m</p>
+            )}
           </div>
         </div>
       </div>
@@ -460,7 +774,7 @@ export function CharacterSheetView({
       <div className="flex flex-1 min-h-0 overflow-hidden">
 
         {/* ---- Coluna esquerda: atributos + recursos ---- */}
-        <div className="w-44 shrink-0 border-r border-border/50 flex flex-col gap-3 p-3 overflow-y-auto">
+        <div className="w-44 min-w-0 shrink-0 border-r border-border/50 flex flex-col gap-3 p-3 overflow-y-auto overflow-x-hidden">
           {/* Atributos — grade 2×3 compacta */}
           <div>
             <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-2">Atributos</p>
@@ -472,6 +786,18 @@ export function CharacterSheetView({
                   abbr={abbr}
                   value={char.atributos?.[key] ?? 10}
                   size="sm"
+                  editable={canEditSheet}
+                  onValueChange={
+                    canEditSheet
+                      ? (v) =>
+                          patchCharacter({
+                            atributos: {
+                              ...(char.atributos ?? {}),
+                              [key]: v,
+                            } as Record<string, number>,
+                          })
+                      : undefined
+                  }
                 />
               ))}
             </div>
@@ -527,7 +853,7 @@ export function CharacterSheetView({
         </div>
 
         {/* ---- Centro: tabela de perícias ---- */}
-        <div className="w-56 shrink-0 border-r border-border/50 flex flex-col min-h-0">
+        <div className="w-64 min-w-[17rem] shrink-0 border-r border-border/50 flex flex-col min-h-0">
           {/* Header da tabela */}
           <div className="p-2 border-b border-border/50 shrink-0">
             <div className="relative">
@@ -546,8 +872,9 @@ export function CharacterSheetView({
               <span className="w-8 text-right">Atr</span>
               <span className="w-8 text-right">N/2</span>
               <span className="w-8 text-right">Trei</span>
-              <span className="w-8 text-right">Outros</span>
-              <span className="w-10 text-right">Total</span>
+              <span className="w-9 text-right">Outros</span>
+              <span className="w-10 text-right">Tot</span>
+              {canEditSheet && <span className="w-6 shrink-0 text-center"> </span>}
             </div>
           </div>
 
@@ -566,8 +893,14 @@ export function CharacterSheetView({
                 else if (totalLevel >= 7) trainingBonus = 4
                 else trainingBonus = 2
               }
-              const outros = (skill.outros ?? 0) + (typeof skill.bonusExtra === 'number' ? skill.bonusExtra : parseInt(String(skill.bonusExtra ?? 0)) || 0)
-              const total = halfLevel + attrMod + trainingBonus + outros
+              const rawOutros =
+                typeof skill.outros === 'number' ? skill.outros : parseInt(String(skill.outros ?? 0), 10) || 0
+              const bonusExtraNum =
+                typeof skill.bonusExtra === 'number'
+                  ? skill.bonusExtra
+                  : parseInt(String(skill.bonusExtra ?? 0), 10) || 0
+              const outrosTotal = rawOutros + bonusExtraNum
+              const total = halfLevel + attrMod + trainingBonus + outrosTotal
               const attrAbbr = ATTR_LABELS[selectedAttr] ?? '???'
 
               return (
@@ -579,9 +912,36 @@ export function CharacterSheetView({
                   attrAbbr={attrAbbr}
                   halfLevel={halfLevel + attrMod}
                   trainingBonus={trainingBonus}
-                  outros={outros}
+                  outros={canEditSheet ? rawOutros : outrosTotal}
                   onRoll={onRollSkill}
                   highlight={isTrained}
+                  editable={canEditSheet}
+                  onToggleTrained={
+                    canEditSheet
+                      ? () =>
+                          patchCharacter({
+                            pericias: {
+                              [skillName]: {
+                                ...skill,
+                                treinada: isTrained ? 'destreinado' : true,
+                              },
+                            },
+                          })
+                      : undefined
+                  }
+                  onOutrosChange={
+                    canEditSheet
+                      ? (v) =>
+                          patchCharacter({
+                            pericias: {
+                              [skillName]: {
+                                ...skill,
+                                outros: v,
+                              },
+                            },
+                          })
+                      : undefined
+                  }
                 />
               )
             })}
@@ -645,6 +1005,7 @@ export function CharacterSheetView({
                                   Dano: <span className="font-mono text-foreground">{weapon.dano || '?'}</span>
                                   {weapon.critico && <span className="ml-2">Crítico: <span className="font-mono text-foreground">{weapon.critico}</span></span>}
                                   {weapon.alcance && parseInt(weapon.alcance) > 1 && <span className="ml-2">Alcance: <span className="font-mono text-foreground">{weapon.alcance}m</span></span>}
+                                  {weapon.tipo && <span className="ml-2">Tipo: <span className="text-foreground">{weapon.tipo}</span></span>}
                                 </p>
                               </div>
                               <div className="text-right">
@@ -673,7 +1034,12 @@ export function CharacterSheetView({
                               {armor.equipada && <span className="ml-1 text-[9px] text-primary/70">(Eq)</span>}
                             </span>
                           </div>
-                          <span className="font-mono font-bold">{armor.ca != null ? `+${armor.ca}` : '?'} CA</span>
+                          <div className="flex items-center gap-2">
+                            {armor.penalidade ? (
+                              <span className="font-mono text-red-400 text-[10px]">Pen. {armor.penalidade}</span>
+                            ) : null}
+                            <span className="font-mono font-bold">{armor.ca != null ? `+${armor.ca}` : '?'} CA</span>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -682,19 +1048,29 @@ export function CharacterSheetView({
               </div>
             </TabsContent>
 
-            {/* PODERES */}
+            {/* PODERES & HABILIDADES */}
             <TabsContent value="poderes" className="flex-1 overflow-y-auto p-3 mt-0">
-              {(char.poderes?.length ?? 0) === 0 ? (
-                <p className="text-xs text-muted-foreground italic">Nenhum poder registrado.</p>
+              {allPowers.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">Nenhum poder ou habilidade registrada.</p>
               ) : (
                 <div className="space-y-2">
-                  {char.poderes!.map((poder, i) => (
+                  {allPowers.map((poder, i) => (
                     <div key={i} className="rounded-lg border border-border/40 bg-muted/10 p-3">
                       <div className="flex items-center gap-2 mb-1">
                         <p className="text-sm font-semibold">{poder.nome}</p>
                         {poder.tipo && (
                           <Badge variant="secondary" className="text-[9px] h-4 px-1.5">{poder.tipo}</Badge>
                         )}
+                        <Badge
+                          variant="outline"
+                          className={`text-[9px] h-4 px-1.5 ${
+                            poder.categoria === 'Habilidade'
+                              ? 'border-blue-500/40 text-blue-400'
+                              : 'border-amber-500/40 text-amber-400'
+                          }`}
+                        >
+                          {poder.categoria}
+                        </Badge>
                       </div>
                       {poder.descricao && (
                         <p className="text-xs text-muted-foreground leading-relaxed">{poder.descricao}</p>
@@ -707,26 +1083,64 @@ export function CharacterSheetView({
 
             {/* MAGIAS */}
             <TabsContent value="magias" className="flex-1 overflow-y-auto p-3 mt-0">
-              {(char.magias?.length ?? 0) === 0 ? (
+              {allSpells.length === 0 ? (
                 <p className="text-xs text-muted-foreground italic">Nenhuma magia registrada.</p>
               ) : (
-                <div className="space-y-2">
-                  {char.magias!.map((magia, i) => (
-                    <div key={i} className="rounded-lg border border-border/40 bg-muted/10 p-3">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="text-sm font-semibold">{magia.nome}</p>
-                        {magia.nivel != null && (
-                          <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-blue-500/40 text-blue-400">
-                            Nível {magia.nivel}
-                          </Badge>
-                        )}
-                        {magia.escola && (
-                          <span className="text-[10px] text-muted-foreground">{magia.escola}</span>
-                        )}
-                      </div>
-                      {magia.descricao && (
-                        <p className="text-xs text-muted-foreground leading-relaxed">{magia.descricao}</p>
-                      )}
+                <div className="space-y-4">
+                  {/* Filtro */}
+                  <div className="relative">
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                    <Input
+                      value={spellFilter}
+                      onChange={(e) => setSpellFilter(e.target.value)}
+                      placeholder="Filtrar magias..."
+                      className="h-7 pl-7 text-xs"
+                    />
+                  </div>
+
+                  {/* CD de magias */}
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-purple-500/5 border border-purple-500/20">
+                    <ScrollText className="w-4 h-4 text-purple-400" />
+                    <span className="text-xs text-purple-300">CD de Magias:</span>
+                    <span className="text-sm font-bold text-purple-400">{spellDC}</span>
+                  </div>
+
+                  {/* Magias agrupadas por tipo e círculo */}
+                  {Object.entries(spellsByType).map(([tipo, circulos]) => (
+                    <div key={tipo}>
+                      <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5">
+                        <BookOpen className="w-3 h-3" />
+                        {typeLabels[tipo] || tipo}
+                      </p>
+                      {Object.entries(circulos)
+                        .sort(([a], [b]) => a.localeCompare(b))
+                        .map(([circulo, spells]) => (
+                          <div key={circulo} className="mb-3">
+                            <p className="text-[9px] font-semibold text-primary/70 uppercase mb-1 ml-1">
+                              {circulo} Círculo
+                            </p>
+                            <div className="space-y-1.5">
+                              {spells.map((magia, i) => (
+                                <div key={i} className="rounded-lg border border-border/40 bg-muted/10 p-3">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <p className="text-sm font-semibold">{magia.nome}</p>
+                                    {magia.escola && (
+                                      <span className="text-[10px] text-muted-foreground">{magia.escola}</span>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
+                                    {magia.execucao && <span>Execução: <span className="text-foreground">{magia.execucao}</span></span>}
+                                    {magia.alcance && <span>Alcance: <span className="text-foreground">{magia.alcance}</span></span>}
+                                    {magia.duracao && <span>Duração: <span className="text-foreground">{magia.duracao}</span></span>}
+                                  </div>
+                                  {magia.descricao && (
+                                    <p className="text-xs text-muted-foreground leading-relaxed mt-1">{magia.descricao}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
                     </div>
                   ))}
                 </div>
@@ -735,49 +1149,151 @@ export function CharacterSheetView({
 
             {/* INVENTÁRIO */}
             <TabsContent value="inventario" className="flex-1 overflow-y-auto p-3 mt-0">
-              {(char.inventario?.itens?.length ?? 0) === 0 ? (
-                <p className="text-xs text-muted-foreground italic">Nenhum item no inventário.</p>
-              ) : (
-                <div className="space-y-1">
-                  {char.inventario!.itens!.map((item, i) => (
-                    <div key={i} className="flex items-center justify-between px-2 py-1.5 rounded border border-border/30 bg-muted/10 text-xs">
-                      <div>
-                        <p className="font-medium">{item.nome}</p>
-                        {item.descricao && <p className="text-muted-foreground">{item.descricao}</p>}
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        {item.qtd != null && (
-                          <span className="text-muted-foreground">×{item.qtd}</span>
-                        )}
-                        {item.peso != null && (
-                          <span className="text-muted-foreground font-mono">{item.peso}kg</span>
-                        )}
-                      </div>
+              <div className="space-y-4">
+                {/* Dinheiro */}
+                {char.inventario?.dinheiro && Object.values(char.inventario.dinheiro).some((v) => v > 0) && (
+                  <div>
+                    <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-2">Dinheiro</p>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(char.inventario.dinheiro)
+                        .filter(([, v]) => v > 0)
+                        .map(([key, value]) => (
+                          <Badge key={key} variant="outline" className="text-xs py-1 px-2 font-mono">
+                            {value} {key}
+                          </Badge>
+                        ))}
                     </div>
-                  ))}
-                </div>
-              )}
+                  </div>
+                )}
+
+                {/* Itens */}
+                {(char.inventario?.itens?.length ?? 0) === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">Nenhum item no inventário.</p>
+                ) : (
+                  <div>
+                    <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-2">Itens</p>
+                    <div className="space-y-1">
+                      {char.inventario!.itens!.map((item, i) => (
+                        <div key={i} className="flex items-center justify-between px-2 py-1.5 rounded border border-border/30 bg-muted/10 text-xs">
+                          <div>
+                            <p className="font-medium">
+                              {item.nome}
+                              {item.equipada && <span className="ml-1 text-[9px] text-primary/70">(Eq)</span>}
+                            </p>
+                            {item.descricao && <p className="text-muted-foreground">{item.descricao}</p>}
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            {(item.quantidade ?? item.qtd) != null && (
+                              <span className="text-muted-foreground">×{item.quantidade ?? item.qtd}</span>
+                            )}
+                            {item.peso != null && (
+                              <span className="text-muted-foreground font-mono">{item.peso}kg</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </TabsContent>
 
             {/* DESCRIÇÃO */}
             <TabsContent value="descricao" className="flex-1 overflow-y-auto p-3 mt-0">
               <div className="space-y-3 text-sm">
+                {/* Foto grande */}
+                {photoUrl && (
+                  <div className="flex justify-center mb-4">
+                    <div className="w-32 h-32 rounded-xl border-2 border-primary/30 bg-muted overflow-hidden">
+                      <img
+                        src={photoUrl}
+                        alt={char.nome || 'Personagem'}
+                        className="w-full h-full object-cover"
+                        style={photoStyle}
+                      />
+                    </div>
+                  </div>
+                )}
+                
                 {[
                   { label: 'Nome', value: char.nome },
                   { label: 'Raça', value: char.raca },
                   { label: 'Origem', value: char.origem },
                   { label: 'Divindade', value: char.divindade },
+                  { label: 'Tendência', value: char.tendencia },
+                  { label: 'Nível', value: totalLevel > 0 ? totalLevel : undefined },
+                  { label: 'Classes', value: char.classes?.map((c) => `${c.nome} ${c.nivel}`).join(', ') },
                 ].filter(f => f.value).map(({ label, value }) => (
                   <div key={label} className="flex items-center gap-2 border-b border-border/30 pb-2">
                     <span className="text-muted-foreground w-20 shrink-0 text-xs uppercase tracking-wide">{label}</span>
                     <span className="text-foreground">{String(value)}</span>
                   </div>
                 ))}
+
+                {/* Atributos completos */}
+                <div className="mt-4">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Atributos</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {Object.entries(ATTR_LABELS).map(([key, abbr]) => {
+                      const val = char.atributos?.[key] ?? 10
+                      const mod = getAttrMod(val)
+                      return (
+                        <div key={key} className="flex items-center justify-between px-2 py-1 rounded bg-muted/20 text-xs">
+                          <span className="text-muted-foreground">{ATTR_FULL_LABELS[key]}</span>
+                          <span className="font-bold">{val} <span className="font-mono text-primary text-[10px]">({formatMod(mod)})</span></span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Estatísticas calculadas */}
+                <div className="mt-4">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Estatísticas</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex items-center justify-between px-2 py-1 rounded bg-muted/20 text-xs">
+                      <span className="text-muted-foreground">Defesa</span>
+                      <span className="font-bold">{defense}</span>
+                    </div>
+                    <div className="flex items-center justify-between px-2 py-1 rounded bg-muted/20 text-xs">
+                      <span className="text-muted-foreground">CD Magias</span>
+                      <span className="font-bold text-purple-400">{spellDC}</span>
+                    </div>
+                    <div className="flex items-center justify-between px-2 py-1 rounded bg-muted/20 text-xs">
+                      <span className="text-muted-foreground">Deslocamento</span>
+                      <span className="font-bold">{char.deslocamento ?? 9}m</span>
+                    </div>
+                    <div className="flex items-center justify-between px-2 py-1 rounded bg-muted/20 text-xs">
+                      <span className="text-muted-foreground">Nível Total</span>
+                      <span className="font-bold">{totalLevel}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </TabsContent>
           </Tabs>
         </div>
       </div>
+
+      {/* Editor completo (página inicial): complemento; recolhido por padrão para manter a mesma aparência */}
+      {complementFullEditor && onCharacterChange && (
+        <Collapsible className="group shrink-0 border-t border-border/50 bg-muted/5">
+          <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[11px] font-medium text-muted-foreground hover:bg-muted/30 hover:text-foreground transition-colors">
+            <span>Editor completo (mesmas opções da página inicial)</span>
+            <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="max-h-[min(72vh,880px)] min-h-[320px] overflow-y-auto border-t border-border/40 bg-background">
+              <CharacterSheetPanel
+                character={char as any}
+                readOnly={readOnly}
+                persistLocalSheets={false}
+                onUpdateCharacter={(data) => onCharacterChange(data as CampaignSheetData)}
+              />
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
     </div>
   )
 }
